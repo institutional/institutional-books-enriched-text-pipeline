@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "pybind11>=2.10.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "institutional-books-llm-pipeline"
+version = "0.1.0"
+description = "Data pipeline to optimize Institutional Books for LLM pretraining"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "click>=8.2.1",
+    "loguru>=0.7.3",
+    "tqdm>=4.67.1",
+    "datasets>=4.3.0",
+    "numpy>=2.3.2",
+    "pandas>=2.3.3",
+    "model2vec[distill]>=0.7.0",
+    "torch>=2.8.0",
+    "nupunkt>=0.2.1",
+    "wtpsplit>=2.1.0",
+    "kenlm>=0.2.0",  # Python bindings for scoring (training tools require separate install)
+    "datasketch>=1.6.0",
+    "mmh3>=5.1.0",
+    "scikit-learn>=1.5.0",
+    "python-dotenv>=1.1.1",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipython>=9.11.0",
+    "pylance>=2.0.1",
+    "pynvim>=0.6.0",
+    "pyright>=1.1.408",
+    "ruff>=0.15.5",
+    "pytest>=8.0.0",
+    "black>=25.1.0",
+]
+
+# Note: C++ extensions (_simhash_cpp, _c99_cpp) are built automatically
+# during installation if pybind11 and a C++ compiler are available.
+
+##[project.scripts]
+## Main pipeline commands
+#prepare-shards = "commands.prepare_shards:main"
+#setup-pipeline = "commands.setup_pipeline:main"
+#process-shard = "commands.process_shard:main"
+#retry-incomplete = "commands.retry_incomplete:main"
+#deduplicate = "commands.deduplicate:main"
+#postprocess-shard = "commands.postprocess_shard:main"
+
+##[project.urls]
+#Homepage = "https://github.com/institutional/institutional-books-llm-pipeline"
+
+[tool.setuptools.packages.find]
+include = ["commands*", "library*", "const*", "utils*"]
+exclude = ["tests*", "prototype_pipeline*"]
+
+#[tool.setuptools.package-data]
+## Include any data files in packages
+#"*" = ["*.yaml", "*.json"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]  # Line too long (handled by formatter)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["prototype_pipeline", ".venv", "DATA", "extensions"]
