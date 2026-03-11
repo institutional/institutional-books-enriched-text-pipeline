@@ -9,7 +9,7 @@ Nupunkt shards (roughly having punctuation similar to English) and SaT shards
 
 import csv
 from pathlib import Path
-from typing import Any, Iterator, TypedDict
+from typing import Iterator
 
 import click
 from datasets import load_dataset
@@ -17,9 +17,8 @@ from loguru import logger
 from tqdm import tqdm
 
 from const.languages import is_nupunkt_language
+from const.types import BookJSON, ManifestStats, ShardStats
 from utils.atomic_write import atomic_write_jsonl
-
-type BookJSON = dict[str, Any]
 
 
 def stream_books_from_hf(
@@ -44,22 +43,6 @@ def determine_segmenter(book: BookJSON) -> str:
 
 def make_shard_filename(shard_id: int, segmenter: str) -> str:
     return f"shard{shard_id:04d}_{segmenter}.jsonl"
-
-
-class ManifestStats(TypedDict):
-    shard_id: str
-    filename: str
-    segmenter: str
-    book_count: int
-
-
-class ShardStats(TypedDict):
-    total_books: int
-    nupunkt_books: int
-    sat_books: int
-    nupunkt_shards: int
-    sat_shards: int
-    total_shards: int
 
 
 def prepare_shards(
