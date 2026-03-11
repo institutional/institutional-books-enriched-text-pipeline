@@ -4,16 +4,16 @@ process_shard.py - main shard processing orchestrator
 Handles steps 1-11.
 """
 
-from datetime import datetime, UTC
 import importlib
 import json
-from pathlib import Path
 import traceback
+from datetime import UTC, datetime
+from pathlib import Path
 
 import click
 from loguru import logger
 
-from commands.steps import get_step_range, MAIN_STEPS
+from commands.steps import MAIN_STEPS, get_step_range
 from const.config import PipelineConfig, load_config
 from const.types import (
     BookJSON,

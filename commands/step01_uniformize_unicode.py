@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 from loguru import logger
 
-from const.config import load_config, PipelineConfig
+from const.config import PipelineConfig, load_config
 from const.types import BookJSON
 from library.denoise.uniformize import uniformize_book
 
