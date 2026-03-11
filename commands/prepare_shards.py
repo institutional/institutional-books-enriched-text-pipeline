@@ -14,6 +14,7 @@ from typing import Any, Iterator, TypedDict
 import click
 from datasets import load_dataset
 from loguru import logger
+from tqdm import tqdm
 
 from const.languages import is_nupunkt_language
 from utils.atomic_write import atomic_write_jsonl
@@ -106,29 +107,38 @@ def prepare_shards(
             }
         )
         queue.clear()
+        logger.info(f"Writing shard to {shard_path}...")
         return next_shard_id
 
     total_books = 0
     nupunkt_books = 0
     sat_books = 0
 
-    for book in stream_books_from_hf(dataset_name, split):
-        segmenter = determine_segmenter(book)
-        if segmenter == "nupunkt":
-            nupunkt_queue.append(book)
-            nupunkt_books += 1
-            if len(nupunkt_queue) >= shard_size:
-                flush_queue(nupunkt_queue, "nupunkt")
-        else:
-            sat_queue.append(book)
-            sat_books += 1
-            if len(sat_queue) >= shard_size:
-                flush_queue(sat_queue, "sat")
+    logger.debug("Starting to stream books...")
+    IB1_SIZE = 983004
+    total = IB1_SIZE
+    if max_books and max_books < IB1_SIZE:
+        total = max_books
+    with tqdm(total=total) as pbar:
+        for book in stream_books_from_hf(dataset_name, split):
+            segmenter = determine_segmenter(book)
+            if segmenter == "nupunkt":
+                nupunkt_queue.append(book)
+                nupunkt_books += 1
+                if len(nupunkt_queue) >= shard_size:
+                    flush_queue(nupunkt_queue, "nupunkt")
+            else:
+                sat_queue.append(book)
+                sat_books += 1
+                if len(sat_queue) >= shard_size:
+                    flush_queue(sat_queue, "sat")
 
-        total_books += 1
-        if max_books and total_books >= max_books:
-            break
+            total_books += 1
+            pbar.update(1)
+            if max_books and total_books >= max_books:
+                break
 
+    logger.info("Book streaming complete.")
     # flush remaining books
     flush_queue(nupunkt_queue, "nupunkt")
     flush_queue(sat_queue, "sat")
@@ -157,13 +167,13 @@ def prepare_shards(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=Path("./DATA/shards"),
-    help="Output directory for shards",
+    help="Output directory for shards (default './DATA/shards')",
 )
 @click.option(
     "--shard-size",
     type=int,
     default=1000,
-    help="Number of books per shard",
+    help="Number of books per shard (default 1000)",
 )
 @click.option(
     "--dataset",
@@ -179,7 +189,7 @@ def prepare_shards(
     "--max-books",
     type=int,
     default=None,
-    help="Maximum number of books to process (for testing)",
+    help="Maximum number of books to process (default None, i.e. no limit))",
 )
 def main(output_dir: Path, shard_size: int, dataset: str, split: str, max_books: int | None):
     """
