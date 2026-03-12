@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 
 from library.denoise.ngrams import (
-    NGramStats,
     NGramScorer,
+    NGramStats,
     build_ngram_stats,
+    load_ngram_stats,
     merge_ngram_stats,
     save_ngram_stats,
-    load_ngram_stats,
 )
 
 

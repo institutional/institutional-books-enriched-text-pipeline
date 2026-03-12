@@ -25,7 +25,7 @@ def uniformize_book(book: BookJSON) -> BookJSON:
     result["uniformized_text"] = uniformized_pages
 
     # remove original text fields
-    result.pop("text_py_page_src", None)
+    result.pop("text_by_page_src", None)
     result.pop("text_by_page_gen", None)
     result.pop("text_analysis_gen", None)
 
