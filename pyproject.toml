@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "institutional-books-llm-pipeline"
 version = "0.1.0"
 description = "Data pipeline to optimize Institutional Books for LLM pretraining"
-readme = "README.md"
+readme = {file = "README.markdown", content-type = "text/markdown"}
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
 classifiers = [
@@ -46,7 +46,11 @@ dev = [
 ]
 
 # Note: C++ extensions (_simhash_cpp, _c99_cpp) are built automatically
-# during installation if pybind11 and a C++ compiler are available.
+# during installation if pybind11 and a C++ compiler are available. Pybind11 can
+# also be installed through this dependency.
+cpp = [
+    "pybind11>=2.10.0",
+]
 
 ##[project.scripts]
 ## Main pipeline commands

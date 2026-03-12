@@ -6,7 +6,7 @@ from typing import Any
 
 from const.types import BookJSON, NormPage, PageIdx, SimhashHash
 
-from utils.simhash import simhash128, are_near_duplicates
+from utils.simhash_fast import simhash128, are_near_duplicates
 from utils.unionfind import UnionFind
 
 
