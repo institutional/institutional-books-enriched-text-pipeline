@@ -11,6 +11,14 @@ type LastCompletedStep = str
 type ErrorMessage = str
 
 
+type LanguageCode = str
+type BooksByLangDict = dict[LanguageCode, list[BookJSON]]
+
+
+type RawPage = str
+type RawPageLines = str
+
+
 # StepFunction(book, config, 'nupunkt' | 'sat') -> BookJSON
 type StepFunction = Callable[[BookJSON, PipelineConfig, str | None], BookJSON]
 

@@ -1,0 +1,406 @@
+"""
+setup_pipeline.py - train base models
+
+Samples books per language from shards and trains Ngram and Nupunkt models for
+later use in the pipeline. Also checks model2vec distilled models and
+classifiers (and optionally distills another model).
+
+In a standard workflow, this should be run after `prepare_shards.py`.
+"""
+
+import json
+import subprocess
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Iterator
+
+import click
+import torch
+from loguru import logger
+
+from const.languages import is_nupunkt_language
+from const.types import BookJSON, BooksByLangDict, RawPage
+from library.denoise.ngrams import build_ngram_stats, save_ngram_stats
+from library.denoise.uniformize import normalize_text
+
+
+def stream_books_from_shards(shard_dir: Path) -> Iterator[BookJSON]:
+    """
+    Stream book records from all shard files in a directory.
+    """
+    for shard_path in sorted(shard_dir.glob("*.jsonl")):
+        with open(shard_path, "r") as f:
+            for line in f:
+                yield json.loads(line)
+
+
+def sample_books_by_language(shard_dir: Path, max_books_per_language: int = 30) -> BooksByLangDict:
+    """
+    Sample books from shards, grouped by language.
+
+    Returns a dictionary mapping language codes to lists of BookJSONs.
+    """
+    books_by_lang: BooksByLangDict = defaultdict(list)
+    for book in stream_books_from_shards(shard_dir):
+        lang = book.get("language_gen", "")
+        if not lang:
+            continue
+        if len(books_by_lang[lang]) < max_books_per_language:
+            books_by_lang[lang].append(book)
+    return dict(books_by_lang)
+
+
+def extract_pages_from_book(book: BookJSON) -> list[RawPage]:
+    pages = book.get("text_by_page_src", [])
+    if not pages:
+        logger.warning(f"No pages detected in book {book.get('barcode_src', 'UNKNOWN')}.")
+    return pages
+
+
+def build_nupunkt_corpus_from_books(
+    books: list[BookJSON],
+    output_path: Path,
+) -> int:
+    """
+    Build training corpus from book records.
+
+    Returns the total number of nonempty pages in this corpus.
+    """
+    # TODO: Validate output and require overwrite permission
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    lines_written = 0
+    with open(output_path, "w", encoding="utf8") as out:
+        for book in books:
+            pages = extract_pages_from_book(book)
+            for page in pages:
+                if not page:
+                    continue
+                page_tokens = normalize_text(page)
+                if not page_tokens:  # e.g. if page only had whitespace
+                    continue
+                out.write(page_tokens + "\n")
+                lines_written += 1
+
+    # TODO: log appropriate statistics
+
+    return lines_written
+
+
+def build_ngram_stats_for_language(
+    books: list[BookJSON],
+    output_path: Path,
+    max_n: int = 5,
+) -> int:
+    """
+    Build ngram statistics from book records and save to disk.
+
+    Returns the total number of nonempty pages processed.
+    """
+    # TODO: Validate output and require overwrite permission
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pages_processed = 0
+
+    corpus_parts: list[RawPage] = []
+    for book in books:
+        pages = extract_pages_from_book(book)
+        for page in pages:
+            if not page:
+                continue
+            page_tokens = normalize_text(page)
+            if not page_tokens:
+                continue
+            corpus_parts.append(page_tokens)
+            pages_processed += 1
+    # Build ngram stats
+    corpus = "\n".join(corpus_parts)
+    stats = build_ngram_stats(corpus, max_n=max_n)
+    save_ngram_stats(stats, output_path)
+
+    # TODO: log appropriate statistics
+
+    return pages_processed
+
+
+def train_nupunkt(
+    input_corpus: Path,
+    output_path: Path,
+    batch_size: int = 100000,
+    prune_freq: int = 10000,
+    min_type_freq: int = 3,
+) -> None:
+    """
+    Train Nupunkt sentence segmentation model.
+    """
+    # TODO: Validate output and require overwrite permission
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Training Nupunkt model: {output_path}")
+
+    cmd = [
+        "nupunkt",
+        "train",
+        str(input_corpus),
+        "--batch-size",
+        str(batch_size),
+        "--prune-freq",
+        str(prune_freq),
+        "--min-type-freq",
+        str(min_type_freq),
+        "-o",
+        str(output_path),
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if result.stdout:
+            for line in result.stdout.strip().split("\n"):
+                logger.debug(f"nupunkt: {line}")
+        logger.info(f"Nupunkt model complete: {output_path}")
+
+    except FileNotFoundError:
+        logger.error("nupunkt command not found. Is Nupunkt installed?")
+        raise
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Nupunkt training failed: {e}")
+        raise
+
+
+def distill_model2vec(
+    output_dir: Path,
+    model_name: str = "BAAI/bge-m3",
+    dim: int = 512,
+) -> Path:
+    """
+    Distill a model2vec embedding model.
+
+    Args:
+        output_dir: Directory to save distilled model
+        model_name: Base model to distill
+        dim: Output embedding dimension
+
+    Returns:
+        Path to distilled model directory
+    """
+    from model2vec.distill import distill
+
+    full_name = model_name.replace("/", "_") + f"_m2v_{dim}dim"
+    save_dir = output_dir / full_name
+
+    if save_dir.exists():
+        logger.info(f"Distilled model already exists: {save_dir}")
+        return save_dir
+
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Distilling model '{model_name}' to {dim} dimensions...")
+
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif (
+        hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+        and torch.__version__ < "2.8"  # Apple silicon compat problems
+    ):
+        device = "mps"
+
+    logger.info(f"Using device: {device}")
+    distilled_model = distill(model_name=model_name, pca_dims=dim, device=device)
+    distilled_model.save_pretrained(str(save_dir))
+
+    logger.info(f"Distilled model saved to: {save_dir}")
+    return save_dir
+
+
+# TODO: Make model2vec distilled model and classification model available and add
+# a tool to download them by default. Then update this aspect of the pipe to
+# get those.
+
+
+def setup_pipeline(
+    shard_dir: Path,
+    output_dir: Path,
+    max_books_per_language: int = 30,
+    ngram_order: int = 5,
+    distill_model: bool = True,
+    model_name: str = "BAAI/bge-m3",
+    model_dim: int = 512,
+    overwrite: bool = False,
+) -> None:
+    """
+    Train all Ngram and Nupunkt LMs from shards.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Sampling up to {max_books_per_language} books per language...")
+    books_by_lang = sample_books_by_language(shard_dir, max_books_per_language)
+    logger.info(f"Found {len(books_by_lang)} languages")
+    for lang, books in sorted(books_by_lang.items()):
+        logger.debug(f"  {lang}: {len(books)} books")
+
+    languages_processed = 0
+    ngram_models_built = 0
+    nupunkt_models_trained = 0
+
+    # Train models for each language
+    for lang, books in sorted(books_by_lang.items()):
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"Processing language: {lang} ({len(books)} books)")
+        logger.info(f"{'=' * 60}")
+
+        lang_stats: dict[str, Any]
+        lang_stats = {"books_sampled": len(books)}
+
+        # ngram model
+        ngram_model = output_dir / f"{lang}_ngram.json.gz"
+        if ngram_model.exists() and not overwrite:
+            logger.info(f"Ngram stats exist, skipping: {ngram_model}")
+        else:
+            logger.info(f"Building ngram stats: {ngram_model}")
+            try:
+                pages = build_ngram_stats_for_language(books, ngram_model, max_n=ngram_order)
+                ngram_models_built += 1
+                lang_stats["ngram_pages"] = pages
+                lang_stats["ngram_built"] = True
+            except Exception as e:
+                logger.error(f"N-gram stats building failed for {lang}: {e}")
+                lang_stats["ngram_error"] = str(e)
+
+        # Build and train Nupunkt if applicable
+        if is_nupunkt_language(lang):
+            nupunkt_corpus = output_dir / f"{lang}_nupunkt.txt"
+            nupunkt_model = output_dir / f"{lang}_nupunkt.bin"
+
+            if nupunkt_model.exists() and not overwrite:
+                logger.info(f"Nupunkt model exists, skipping: {nupunkt_model}")
+            else:
+                logger.info(f"Building Nupunkt corpus: {nupunkt_corpus}")
+                lines = build_nupunkt_corpus_from_books(books, nupunkt_corpus)
+                lang_stats["nupunkt_corpus_lines"] = lines
+
+                logger.info("Training Nupunkt model...")
+                try:
+                    train_nupunkt(nupunkt_corpus, nupunkt_model)
+                    nupunkt_models_trained += 1
+                    lang_stats["nupunkt_trained"] = True
+                except Exception as e:
+                    logger.error(f"Nupunkt training failed for {lang}: {e}")
+                    lang_stats["nupunkt_error"] = str(e)
+        else:
+            logger.info("Skipping Nupunkt (language not in NUPUNKT_LANGUAGES)")
+
+        languages_processed += 1
+        logger.debug(lang_stats)
+
+    logger.info(f"{languages_processed=}")
+    logger.info(f"{ngram_models_built=}")
+    logger.info(f"{nupunkt_models_trained=}")
+
+    # Distill model2vec
+    if distill_model:
+        logger.info(f"\n{'=' * 60}")
+        logger.info("Distilling model2vec model")
+        logger.info(f"{'=' * 60}")
+
+        try:
+            distill_model2vec(output_dir, model_name, model_dim)
+        except Exception as e:
+            logger.error(f"Model distillation failed: {e}")
+    logger.info("\nSetup pipeline complete!")
+
+
+################################################################################
+
+
+@click.command()
+@click.option(
+    "--shard-dir",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Directory containing raw shard files (from prepare_shards)",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Directory for trained models",
+)
+@click.option(
+    "--max-books",
+    type=int,
+    default=20,
+    help="Maximum books to sample per language (default: 20)",
+)
+@click.option(
+    "--ngram-order",
+    type=int,
+    default=5,
+    help="N-gram order (default: 5)",
+)
+@click.option(
+    "--no-distill",
+    is_flag=True,
+    default=False,
+    help="Skip model2vec distillation",
+)
+@click.option(
+    "--model-name",
+    type=str,
+    default="BAAI/bge-m3",
+    help="Base model for distillation (default: BAAI/bge-m3)",
+)
+@click.option(
+    "--model-dim",
+    type=int,
+    default=256,
+    help="Output dimension for distillation (default: 256)",
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    default=False,
+    help="Overwrite existing models",
+)
+def main(
+    shard_dir: Path,
+    output_dir: Path,
+    max_books: int,
+    ngram_order: int,
+    no_distill: bool,
+    model_name: str,
+    model_dim: int,
+    overwrite: bool,
+):
+    """
+    Train language models from prepared shards.
+
+    Reads raw shard files created by prepare_shards, samples books per
+    language, and trains Ngram and Nupunkt models for the processing
+    pipeline. Also distills a model2vec model for chunking.
+
+    Example:
+        python commands/setup_pipeline.py \\
+            --shard-dir ./DATA/shards/raw \\
+            --output-dir ./DATA/models
+    """
+    click.echo(f"Setting up pipeline from: {shard_dir}")
+    click.echo(f"Output directory: {output_dir}")
+    click.echo(f"Max books per language: {max_books}")
+
+    setup_pipeline(
+        shard_dir=shard_dir,
+        output_dir=output_dir,
+        max_books_per_language=max_books,
+        ngram_order=ngram_order,
+        distill_model=not no_distill,
+        model_name=model_name,
+        model_dim=model_dim,
+        overwrite=overwrite,
+    )
+
+
+if __name__ == "__main__":
+    main()
