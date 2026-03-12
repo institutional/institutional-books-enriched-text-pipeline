@@ -355,8 +355,8 @@ def setup_pipeline(
 @click.option(
     "--model-dim",
     type=int,
-    default=256,
-    help="Output dimension for distillation (default: 256)",
+    default=512,
+    help="Output dimension for distillation (default: 512)",
 )
 @click.option(
     "--overwrite",
