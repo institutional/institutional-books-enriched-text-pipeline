@@ -16,7 +16,12 @@ type BooksByLangDict = dict[LanguageCode, list[BookJSON]]
 
 
 type RawPage = str
-type RawPageLines = str
+
+# After normalization
+type NormPage = str
+
+type PageIdx = int
+type SimhashHash = int
 
 
 # StepFunction(book, config, 'nupunkt' | 'sat') -> BookJSON
