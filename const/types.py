@@ -2,7 +2,7 @@
 types.py - user types
 """
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, NewType, TypedDict
 
 from const.config import PipelineConfig
 
@@ -15,10 +15,14 @@ type LanguageCode = str
 type BooksByLangDict = dict[LanguageCode, list[BookJSON]]
 
 
-type RawPage = str
+# Distinct types for better type checking
+RawText = NewType("RawText", str)  # pre normalization
+NormText = NewType("NormText", str)  # post normalization
+CharTokens = NewType("CharTokens", str)
 
-# After normalization
-type NormPage = str
+# Semantically different but not type different
+type RawPage = RawText
+type NormPage = NormText
 
 type PageIdx = int
 type SimhashHash = int

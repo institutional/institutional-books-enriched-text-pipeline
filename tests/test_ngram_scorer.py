@@ -71,12 +71,6 @@ class TestBuildNgramStats:
         # Trigrams: "a b c", "b c d", "c d e"
         assert stats.total_counts[3] == 3
 
-    def test_unicode_normalization(self):
-        """Test that text is properly normalized."""
-        # Curly quotes should be normalized to straight quotes
-        stats = build_ngram_stats("\u201chello\u201d")
-        assert '"' in str(stats.counts[1].keys())
-
 
 class TestNGramScorer:
     """Tests for NGramScorer class."""

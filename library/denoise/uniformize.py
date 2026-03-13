@@ -4,8 +4,9 @@ uniformize.py - unicode normalization
 
 import re
 import unicodedata
+from typing import cast
 
-from const.types import BookJSON
+from const.types import BookJSON, CharTokens, NormPage, NormText, RawPage, RawText
 
 
 def uniformize_book(book: BookJSON) -> BookJSON:
@@ -14,7 +15,7 @@ def uniformize_book(book: BookJSON) -> BookJSON:
 
     Reads from 'text_by_page_src' and creates 'uniformized_text'.
     """
-    book_text: list[str] | None = book.get("text_by_page_src")
+    book_text: list[RawPage] | None = book.get("text_by_page_src")
 
     if not book_text:
         book_id = book.get("barcode_src", "UNKNOWN_BARCODE")
@@ -32,13 +33,15 @@ def uniformize_book(book: BookJSON) -> BookJSON:
     return result
 
 
-def normalize_unicode_in_page(raw_page: str) -> str:
+def normalize_unicode_in_page(raw_page: RawPage) -> NormPage:
     """
     Normalize each line of text in a page.
 
     Preserves line breaks.
     """
-    return "\n".join([normalize_text(line) for line in raw_page.splitlines()])
+    normalized_lines = [normalize_text(RawText(line)) for line in raw_page.splitlines()]
+    joined = "\n".join(cast(list[str], normalized_lines))  # python type warts
+    return cast(NormPage, joined)
 
 
 # All will be mapped to ASCII hyphen-minus ("-")
@@ -116,7 +119,7 @@ def normalize_quotes(text: str) -> str:
     return text.translate(QUOTE_MAP)
 
 
-def normalize_text(raw: str) -> str:
+def normalize_text(raw: RawText) -> NormText:
     """
     Transform raw text into normalized form.
     """
@@ -139,13 +142,14 @@ def normalize_text(raw: str) -> str:
     # 9. Strip leading/trailing spaces
     text = text.strip()
 
-    return text
+    return NormText(text)
 
 
-def to_char_tokens(text: str) -> str:
+def to_char_tokens(text: NormText) -> CharTokens:
     """
     Convert text to space-separated character tokens (e.g. for KenLM).
 
     Spaces are represented as the special token "<sp>".
     """
-    return " ".join("<sp>" if ch == " " else ch for ch in text)
+    ret = " ".join("<sp>" if ch == " " else ch for ch in text)
+    return cast(CharTokens, ret)

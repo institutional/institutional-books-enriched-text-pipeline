@@ -1,5 +1,8 @@
 """Tests for library/denoise/duplicate_pages.py"""
 
+from typing import cast
+
+from const.types import BookJSON, NormPage
 from library.denoise.duplicate_pages import (
     detect_duplicate_pages,
     remove_duplicate_pages,
@@ -14,6 +17,7 @@ class TestDetectDuplicatePages:
             "This is the second page with different content about oranges.",
             "This is the third page with content about bananas and grapes.",
         ]
+        pages = cast(list[NormPage], pages)
         pages_to_keep, clusters = detect_duplicate_pages(pages)
         assert len(pages_to_keep) == 3
         assert clusters == {}
@@ -35,6 +39,7 @@ class TestDetectDuplicatePages:
             "Short",
             "This is a longer page that should be considered for deduplication.",
         ]
+        pages = cast(list[NormPage], pages)
         # Short pages (< 50 chars) should always be kept
         pages_to_keep, _ = detect_duplicate_pages(pages, min_length=50)
         assert 0 in pages_to_keep
@@ -53,6 +58,7 @@ class TestRemoveDuplicatePages:
             "This is a page with enough content to be considered for deduplication.",
             "Unique page here.",
         ]
+        pages = cast(list[NormPage], pages)
         cleaned, num_removed = remove_duplicate_pages(pages)
         assert num_removed == 1
         assert len(cleaned) == 2
@@ -73,6 +79,6 @@ class TestRemoveDuplicatePagesFromBook:
         assert result.get("_duplicate_pages_removed") == 1
 
     def test_empty_book(self):
-        book = {"barcode_src": "test123", "uniformized_text": []}
+        book: BookJSON = {"barcode_src": "test123", "uniformized_text": []}
         result = remove_duplicate_pages_from_book(book)
         assert result["uniformized_text"] == []

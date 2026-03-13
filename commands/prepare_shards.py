@@ -80,7 +80,7 @@ def prepare_shards(
 
         filename = make_shard_filename(shard_id, segmenter)
         shard_path = raw_dir / filename
-        count = atomic_write_jsonl(iter(queue), shard_path)  # XXX: WHAT IS THIS
+        count = atomic_write_jsonl(iter(queue), shard_path)
         manifest_entries.append(
             {
                 "shard_id": f"{shard_id:04d}",
