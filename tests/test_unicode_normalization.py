@@ -208,7 +208,7 @@ class TestNormalizeText:
 
 
 class TestToCharTokens:
-    """Test character tokenization for KenLM."""
+    """Test character tokenization."""
 
     def test_basic_tokenization(self):
         """Characters should be space-separated."""

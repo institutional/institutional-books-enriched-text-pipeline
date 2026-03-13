@@ -14,7 +14,7 @@ import yaml
 class ModelPaths:
     """Paths to model directories."""
 
-    kenlm: Path = Path("./DATA/pretrain_generated")
+    ngram: Path = Path("./DATA/pretrain_generated")
     nupunkt: Path = Path("./DATA/pretrin_generated")
     embedding: Path = Path("./DATA/distilled_models/BAAI_bge-m3_m2v_512dim")
 
@@ -48,7 +48,7 @@ class PipelineConfig:
     def from_dict(cls, data: dict[str, Any]) -> "PipelineConfig":
         """Create config from dictionary."""
         model_paths = ModelPaths(
-            kenlm=Path(data.get("model_paths", {}).get("kenlm", "./DATA/pretrain_generated")),
+            ngram=Path(data.get("model_paths", {}).get("ngram", "./DATA/pretrain_generated")),
             nupunkt=Path(data.get("model_paths", {}).get("nupunkt", "./DATA/pretrain_generated")),
             embedding=Path(
                 data.get("model_paths", {}).get(

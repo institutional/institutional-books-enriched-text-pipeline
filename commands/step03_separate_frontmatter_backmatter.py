@@ -6,16 +6,15 @@ This uses pretrained model2vec classifiers.
 
 import json
 from pathlib import Path
-from typing import Any
 
 import click
 
 from const.config import PipelineConfig, load_config
 from const.types import BookJSON
 from library.denoise.frontmatter import (
-    separate_endmatter_book,
-    load_classifier,
     PageClassifier,
+    load_classifier,
+    separate_endmatter_book,
 )
 
 # module-level classifier cache
