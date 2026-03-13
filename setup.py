@@ -6,8 +6,8 @@ Follow the README for standard building instructions.
 
 The extensions provide significant performance improvements:
 
-- _simhash_cpp: 128-bit simhash using MurmurHash3
-- _c99_cpp: C99 topic segmentation algorithm
+- extensions.built._simhash_cpp: 128-bit simhash using MurmurHash3
+- extensions.built._c99_cpp: C99 topic segmentation algorithm
 
 Extensions are optional - the library falls back to pure Python implementations
 when extensions are not available.
@@ -42,37 +42,37 @@ def get_extensions():
         return []
 
     extensions = []
-    ext_dir = Path(__file__).parent / "extensions"
 
     # Common compile args for performance
     extra_compile_args = ["-O3"]
 
     # Add -march=native on non-Windows platforms
+    # (This has never been tested on a Windows platform)
     if sys.platform != "win32":
         extra_compile_args.append("-march=native")
 
     # Simhash extension
-    simhash_dir = ext_dir / "simhash_cpp"
-    if simhash_dir.exists():
+    simhash_sources = [
+        "extensions/simhash_cpp/simhash_bindings.cpp",
+        "extensions/simhash_cpp/simhash_impl.cpp",
+    ]
+    if all(Path(src).exists() for src in simhash_sources):
         extensions.append(
             Pybind11Extension(
-                "_simhash_cpp",
-                sources=[
-                    str(simhash_dir / "simhash_bindings.cpp"),
-                    str(simhash_dir / "simhash_impl.cpp"),
-                ],
+                "extensions.built._simhash_cpp",
+                sources=simhash_sources,
                 extra_compile_args=extra_compile_args,
                 cxx_std=17,
             )
         )
 
     # C99 chunking extension
-    c99_dir = ext_dir / "c99_cpp"
-    if c99_dir.exists():
+    c99_sources = ["extensions/c99_cpp/c99_banded.cpp"]
+    if all(Path(src).exists() for src in c99_sources):
         extensions.append(
             Pybind11Extension(
-                "_c99_cpp",
-                sources=[str(c99_dir / "c99_banded.cpp")],
+                "extensions.built._c99_cpp",
+                sources=c99_sources,
                 extra_compile_args=extra_compile_args,
                 cxx_std=17,
             )

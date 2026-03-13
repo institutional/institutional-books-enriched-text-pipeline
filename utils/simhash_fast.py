@@ -14,37 +14,31 @@ Production deployments should always use C++ for performance (100-300x faster).
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from utils.simhash import (
+    are_near_duplicates as _py_are_near_duplicates,
+)
+from utils.simhash import (
+    extract_bands as _py_extract_bands,
+)
+from utils.simhash import (
+    hamming_distance as _py_hamming_distance,
+)
 
 # Import pure Python implementation as fallback
 from utils.simhash import (
     simhash128 as _py_simhash_128,
-    hamming_distance as _py_hamming_distance,
-    are_near_duplicates as _py_are_near_duplicates,
-    extract_bands as _py_extract_bands,
 )
 
 # Try to import the C++ extension
 _cpp_module = None
 
 try:
-    # First try: installed as a package
-    import _simhash_cpp
+    # Import from extensions.built package if available
+    from extensions.built import _simhash_cpp
 
     _cpp_module = _simhash_cpp
 except ImportError:
-    try:
-        # Second try: built in-place in extensions/simhash_cpp/
-        ext_dir = Path(__file__).parent.parent / "extensions" / "simhash_cpp"
-        if ext_dir.exists():
-            sys.path.insert(0, str(ext_dir))
-            import _simhash_cpp
-
-            _cpp_module = _simhash_cpp
-            sys.path.pop(0)
-    except ImportError:
-        pass
+    pass
 
 
 def is_cpp_available() -> bool:
@@ -72,7 +66,7 @@ def simhash128(text: str, ngram_size: int = 5) -> int:
         128-bit simhash as a Python int
     """
     if _cpp_module is not None:
-        return _cpp_module.simhash_128(text, ngram_size)  # pyright: ignore[reportOptionalMemberAccess]
+        return _cpp_module.simhash_128(text, ngram_size)
     else:
         return _py_simhash_128(text, ngram_size)
 
@@ -91,7 +85,7 @@ def simhash128_batch(texts: list[str], ngram_size: int = 5) -> list[int]:
         List of 128-bit simhashes as Python ints
     """
     if _cpp_module is not None:
-        return _cpp_module.simhash_128_batch(texts, ngram_size)  # pyright: ignore[reportOptionalMemberAccess]
+        return _cpp_module.simhash_128_batch(texts, ngram_size)
     else:
         return [_py_simhash_128(text, ngram_size) for text in texts]
 
@@ -110,7 +104,7 @@ def hamming_distance(hash1: int, hash2: int) -> int:
         Number of differing bits (0-128)
     """
     if _cpp_module is not None:
-        return _cpp_module.hamming_distance(hash1, hash2)  # pyright: ignore[reportOptionalMemberAccess]
+        return _cpp_module.hamming_distance(hash1, hash2)
     else:
         return _py_hamming_distance(hash1, hash2)
 
@@ -128,7 +122,7 @@ def are_near_duplicates(hash1: int, hash2: int, threshold: int = 5) -> bool:
         True if Hamming distance <= threshold
     """
     if _cpp_module is not None:
-        return _cpp_module.are_near_duplicates(hash1, hash2, threshold)  # pyright: ignore[reportOptionalMemberAccess]
+        return _cpp_module.are_near_duplicates(hash1, hash2, threshold)
     else:
         return _py_are_near_duplicates(hash1, hash2, threshold)
 
@@ -146,6 +140,6 @@ def extract_bands(hash_value: int) -> list[int]:
         List of 6 band values
     """
     if _cpp_module is not None:
-        return _cpp_module.extract_bands(hash_value)  # pyright: ignore[reportOptionalMemberAccess]
+        return _cpp_module.extract_bands(hash_value)
     else:
         return _py_extract_bands(hash_value)

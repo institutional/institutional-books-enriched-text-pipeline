@@ -45,9 +45,9 @@ dev = [
     "black>=25.1.0",
 ]
 
-# Note: C++ extensions (_simhash_cpp, _c99_cpp) are built automatically
-# during installation if pybind11 and a C++ compiler are available. Pybind11 can
-# also be installed through this dependency.
+# Note: C++ extensions are built automatically during installation if pybind11
+# and a C++ compiler are available. Extensions are placed in extensions/built/.
+# Pybind11 can also be installed through this dependency.
 cpp = [
     "pybind11>=2.10.0",
 ]
@@ -65,7 +65,7 @@ cpp = [
 #Homepage = "https://github.com/institutional/institutional-books-llm-pipeline"
 
 [tool.setuptools.packages.find]
-include = ["commands*", "library*", "const*", "utils*"]
+include = ["commands*", "library*", "const*", "utils*", "extensions*"]
 exclude = ["tests*", "prototype_pipeline*"]
 
 #[tool.setuptools.package-data]
@@ -86,3 +86,8 @@ ignore = ["E501"]  # Line too long (handled by formatter)
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["prototype_pipeline", ".venv", "DATA", "extensions"]
+
+[dependency-groups]
+dev = [
+    "pybind11-stubgen>=2.5.5",
+]
