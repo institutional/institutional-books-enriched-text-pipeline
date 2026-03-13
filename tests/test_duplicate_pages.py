@@ -1,9 +1,9 @@
 """Tests for library/denoise/duplicate_pages.py"""
 
 from library.denoise.duplicate_pages import (
-    remove_duplicate_pages_from_book,
     detect_duplicate_pages,
     remove_duplicate_pages,
+    remove_duplicate_pages_from_book,
 )
 
 

@@ -6,7 +6,6 @@ Detect duplicate pages within a single book and remove all but the first one.
 
 import json
 from pathlib import Path
-from typing import Any
 
 import click
 

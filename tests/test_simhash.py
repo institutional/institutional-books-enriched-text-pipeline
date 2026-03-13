@@ -8,24 +8,40 @@ C++ extension wrapper (utils/simhash_fast.py).
 import pytest
 
 from utils.simhash import (
-    ngrams,
-    simhash128 as py_simhash128,
-    hamming_distance as py_hamming_distance,
-    are_near_duplicates as py_are_near_duplicates,
-    has_sufficient_entropy,
-    extract_bands as py_extract_bands,
     BAND_BITS,
     NUM_BANDS,
+    has_sufficient_entropy,
+    ngrams,
+)
+from utils.simhash import (
+    are_near_duplicates as py_are_near_duplicates,
+)
+from utils.simhash import (
+    extract_bands as py_extract_bands,
+)
+from utils.simhash import (
+    hamming_distance as py_hamming_distance,
+)
+from utils.simhash import (
+    simhash128 as py_simhash128,
 )
 
 try:
     from utils.simhash_fast import (
-        simhash128 as fast_simhash128,
-        hamming_distance as fast_hamming_distance,
         are_near_duplicates as fast_are_near_duplicates,
+    )
+    from utils.simhash_fast import (
         extract_bands as fast_extract_bands,
-        is_cpp_available,
+    )
+    from utils.simhash_fast import (
         get_backend,
+        is_cpp_available,
+    )
+    from utils.simhash_fast import (
+        hamming_distance as fast_hamming_distance,
+    )
+    from utils.simhash_fast import (
+        simhash128 as fast_simhash128,
     )
 except ImportError:
     fast_simhash128 = None

@@ -3,7 +3,7 @@
 import pytest
 
 from const.types import BookJSON
-from library.denoise.uniformize import uniformize_book, normalize_unicode_in_page
+from library.denoise.uniformize import normalize_unicode_in_page, uniformize_book
 
 
 class TestNormalizeUnicodeInPage:
