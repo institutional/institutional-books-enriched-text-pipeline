@@ -71,7 +71,7 @@ def dehyphenate_book(
     if lm_cache is None:
         lm_cache = {}
 
-    model_dir = config.model_paths.ngram if config else Path("./DATA/pretrain_generated")
+    model_dir = config.model_paths.ngram if config else Path("./DATA/pretrain/models")
     base_scorer = load_ngram_scorer(lang, model_dir, lm_cache)
 
     dehyphenated = dehyphenate_middlematter(middlematter, base_scorer)

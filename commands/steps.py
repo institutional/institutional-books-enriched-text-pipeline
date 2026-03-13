@@ -8,9 +8,9 @@ from typing import Optional
 
 MAIN_STEPS = [
     "step01_uniformize_unicode",
-    # "step02_remove_duplicate_pages",
-    # "step03_separate_frontmatter_backmatter",
-    # "step04_dehyphenate",
+    "step02_remove_duplicate_pages",
+    "step03_separate_frontmatter_backmatter",
+    "step04_dehyphenate",
     # "step05_headerfooter_removal",
     # "step06_pagenumber_removal",
     # "step07_perplexity_filter",
