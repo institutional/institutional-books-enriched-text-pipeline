@@ -65,6 +65,7 @@ def process_book_through_steps(
 
     for step_name in steps:
         try:
+            logger.debug(f"Starting {step_name} on {book_id}.")
             step_fn = import_step_function(step_name)
             current_book = step_fn(current_book, config, segmenter)
             last_completed_step = step_name
@@ -73,6 +74,7 @@ def process_book_through_steps(
             logger.error(f"Book {book_id} failed at {step_name}: {error_msg}")
             logger.debug(traceback.format_exc())
             return current_book, last_completed_step, error_msg
+    logger.debug(f"Steps complete on {book_id}")
 
     return current_book, last_completed_step, None
 
