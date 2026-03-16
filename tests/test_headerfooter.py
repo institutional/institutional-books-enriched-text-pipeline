@@ -4,14 +4,13 @@ Tests for library/denoise/headerfooter.py
 Migrated from prototype_pipeline/commands/denoise/test_headerfooter_removal.py
 """
 
-import pytest
 
 from library.denoise.headerfooter import (
-    ngrams,
     clustered_group,
-    remove_hf_lines,
-    minhash_from_tokens,
     detect_and_clean_headers_footers,
+    minhash_from_tokens,
+    ngrams,
+    remove_hf_lines,
 )
 
 

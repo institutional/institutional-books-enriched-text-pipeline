@@ -1,10 +1,10 @@
 """Tests for library/denoise/pagenumber.py"""
 
 from library.denoise.pagenumber import (
-    remove_page_numbers_book,
-    is_probable_page_number_line,
     detect_and_remove_page_numbers,
+    is_probable_page_number_line,
     numeric_count,
+    remove_page_numbers_book,
 )
 
 

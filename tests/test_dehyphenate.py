@@ -5,14 +5,14 @@ Tests for library/denoise/dehyphenate.py
 import pytest
 
 from library.denoise.dehyphenate import (
+    char_join_hyphen_break,
+    dehyphenate_book,
+    dehyphenate_middlematter,
+    dehyphenate_page,
     ends_with_hyphen,
     has_hyphenated_lines,
-    char_join_hyphen_break,
-    dehyphenate_page,
-    dehyphenate_middlematter,
-    dehyphenate_book,
 )
-from library.denoise.ngrams import build_ngram_stats, NGramScorer
+from library.denoise.ngrams import NGramScorer, build_ngram_stats
 
 
 class TestEndsWithHyphen:

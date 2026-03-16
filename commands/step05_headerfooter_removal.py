@@ -7,8 +7,8 @@ from pathlib import Path
 
 import click
 
-from const.types import BookJSON
 from const.config import PipelineConfig, load_config
+from const.types import BookJSON
 from library.denoise.headerfooter import remove_headers_footers_book
 
 
