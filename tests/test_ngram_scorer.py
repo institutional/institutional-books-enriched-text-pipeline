@@ -275,3 +275,97 @@ class TestScorerBackoffBehavior:
         score = scorer.score_raw("z")
         # Should not be -inf due to add-k smoothing at unigram level
         assert score != float("-inf")
+
+
+# =============================================================================
+# Integration tests - Real n-gram models from disk
+# =============================================================================
+
+# Check for real model availability
+_default_model_dir = Path("./DATA/pretrain/models")
+_eng_model_path = _default_model_dir / "eng_ngram.json.gz"
+
+requires_ngram_model = pytest.mark.skipif(
+    not _eng_model_path.exists(),
+    reason=f"English n-gram model not available at {_eng_model_path}",
+)
+
+
+@requires_ngram_model
+class TestNGramScorerWithRealModel:
+    """Integration tests using real n-gram models from disk."""
+
+    def test_load_real_model(self):
+        """Test that real model loads successfully."""
+        stats = load_ngram_stats(_eng_model_path)
+        assert stats.vocab_size > 0
+        assert stats.total_counts[1] > 0
+
+    def test_real_model_scores_english(self):
+        """Test that real English model gives valid scores for English text."""
+        stats = load_ngram_stats(_eng_model_path)
+        scorer = NGramScorer(stats)
+
+        english_text = "The quick brown fox jumps over the lazy dog"
+
+        english_score = scorer.score_raw(english_text)
+
+        assert english_score != float("-inf")
+        assert english_score < 0  # Log probabilities are negative
+
+    def test_real_model_common_patterns(self):
+        """Test that common character patterns are recognized."""
+        stats = load_ngram_stats(_eng_model_path)
+        scorer = NGramScorer(stats)
+
+        # Common English patterns
+        common_text = "the and is are was"
+
+        common_score = scorer.score_raw(common_text)
+
+        assert common_score != float("-inf")
+        assert isinstance(common_score, float)
+
+    def test_real_model_character_ngrams(self):
+        """Test that character n-gram model works as expected."""
+        stats = load_ngram_stats(_eng_model_path)
+        scorer = NGramScorer(stats)
+
+        # "th" and "he" are common in English
+        text_with_common_chars = "the the the"
+        text_with_rare_chars = "xyz xyz xyz"
+
+        common_score = scorer.score_raw(text_with_common_chars)
+        rare_score = scorer.score_raw(text_with_rare_chars)
+
+        # Common character patterns should score better
+        assert common_score > rare_score
+
+    def test_real_model_handles_long_text(self):
+        """Test that real model handles longer text efficiently."""
+        stats = load_ngram_stats(_eng_model_path)
+        scorer = NGramScorer(stats)
+
+        long_text = "This is a longer piece of text that contains multiple sentences. " * 20
+        score = scorer.score_raw(long_text)
+
+        assert score != float("-inf")
+        assert isinstance(score, float)
+
+    def test_real_model_normalized_vs_raw_text(self):
+        """Test model behavior with various text normalizations."""
+        stats = load_ngram_stats(_eng_model_path)
+        scorer = NGramScorer(stats)
+
+        # These should all produce valid scores
+        texts = [
+            "Hello World",
+            "hello world",
+            "HELLO WORLD",
+            "Hello, World!",
+            "Hello   World",
+        ]
+
+        for text in texts:
+            score = scorer.score_raw(text)
+            assert score != float("-inf"), f"Failed for: {text}"

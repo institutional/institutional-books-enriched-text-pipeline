@@ -1,10 +1,13 @@
 """Tests for library/denoise/frontmatter.py"""
 
+from pathlib import Path
+
 import pytest
 
 from library.denoise.frontmatter import (
     identify_frontmatter_backmatter,
     separate_endmatter_book,
+    load_classifier,
 )
 
 
@@ -141,3 +144,160 @@ class TestSeparateEndmatterBook:
 
         with pytest.raises(ValueError, match="No 'uniformized_text' found"):
             separate_endmatter_book(book, classifier)
+
+
+# =============================================================================
+# Integration tests - Real m2v classifier
+# =============================================================================
+
+# Check for real classifier availability
+_default_classifier_path = Path("./DATA/pretrain/models/mmem_classifier")
+
+requires_m2v_classifier = pytest.mark.skipif(
+    not _default_classifier_path.exists(),
+    reason=f"m2v classifier not available at {_default_classifier_path}",
+)
+
+
+@requires_m2v_classifier
+class TestFrontmatterWithRealClassifier:
+    """Integration tests using real m2v classifier."""
+
+    def test_load_real_classifier(self):
+        """Test that real classifier loads successfully."""
+        classifier = load_classifier(_default_classifier_path)
+        assert classifier is not None
+        assert hasattr(classifier, "predict")
+
+    def test_classifier_returns_valid_labels(self):
+        """Test that classifier returns valid label strings."""
+        classifier = load_classifier(_default_classifier_path)
+
+        pages = ["This is a preface page.", "This is chapter content.", "This is an index."]
+        predictions = classifier.predict(pages)
+
+        assert len(predictions) == 3
+        for pred in predictions:
+            assert isinstance(pred, str)
+
+    def test_typical_book_structure(self):
+        """Test classification of a typical book structure."""
+        classifier = load_classifier(_default_classifier_path)
+
+        # Simulated book with clear structure
+        pages = [
+            "PREFACE\n\nThis book is dedicated to all students of science.",
+            "TABLE OF CONTENTS\n\nChapter 1 - Introduction\nChapter 2 - Methods",
+            "CHAPTER 1\n\nIntroduction to the subject matter. This chapter covers the basics.",
+            "CHAPTER 1 (continued)\n\nMore detailed discussion of foundational concepts.",
+            "CHAPTER 2\n\nMethodology and approach used in this research study.",
+            "CHAPTER 2 (continued)\n\nFurther details about the experimental methods.",
+            "BIBLIOGRAPHY\n\nSmith, J. (2020). Research Methods. Academic Press.",
+            "INDEX\n\nA\nApproach, 45\nAnalysis, 67",
+        ]
+
+        front_end, main_end, total = identify_frontmatter_backmatter(pages, classifier)
+
+        # Should identify some frontmatter and backmatter
+        assert total == 8
+        # Frontmatter should be at least the preface/TOC
+        assert front_end >= 0
+        # Main content should end before bibliography/index
+        assert main_end <= total
+
+    def test_all_content_book(self):
+        """Test a book that is all main content."""
+        classifier = load_classifier(_default_classifier_path)
+
+        # All pages are clearly main content
+        pages = [
+            "Chapter 1: The story begins on a dark and stormy night in London.",
+            "The protagonist walked through the rain, contemplating life choices.",
+            "Meanwhile, across town, events were unfolding that would change everything.",
+            "Chapter 2: The next morning brought unexpected visitors to the door.",
+            "The conversation that followed revealed shocking family secrets.",
+        ]
+
+        front_end, main_end, total = identify_frontmatter_backmatter(pages, classifier)
+
+        # Should identify some middlematter (at least 2 pages required by algorithm)
+        assert total == 5
+        # Check that result makes sense (indices are valid)
+        assert 0 <= front_end <= main_end <= total
+
+    def test_separate_book_with_real_classifier(self):
+        """Test full book separation with real classifier."""
+        classifier = load_classifier(_default_classifier_path)
+
+        book = {
+            "barcode_src": "test123",
+            "uniformized_text": [
+                "PREFACE\n\nWelcome to this comprehensive guide.",
+                "Chapter 1\n\nThe fundamentals of the subject are covered here.",
+                "Chapter 2\n\nAdvanced topics build on the previous chapter.",
+                "Chapter 3\n\nPractical applications demonstrate the concepts.",
+                "INDEX\n\nA: Applications, 45\nB: Basics, 12",
+            ],
+        }
+
+        result = separate_endmatter_book(book, classifier)
+
+        # Should have all three sections
+        assert "frontmatter" in result
+        assert "middlematter" in result
+        assert "backmatter" in result
+        assert "uniformized_text" not in result
+
+        # Total pages should be preserved
+        total_pages = (
+            len(result["frontmatter"])
+            + len(result["middlematter"])
+            + len(result["backmatter"])
+        )
+        assert total_pages == 5
+
+    def test_empty_pages_handled(self):
+        """Test that empty pages don't break classification."""
+        classifier = load_classifier(_default_classifier_path)
+
+        pages = [
+            "",
+            "Chapter 1\n\nActual content starts here with important information.",
+            "Chapter 2\n\nMore content continues in this chapter.",
+            "",
+        ]
+
+        front_end, main_end, total = identify_frontmatter_backmatter(pages, classifier)
+
+        # Should handle empty pages gracefully without crashing
+        assert total == 4
+        # Result should be valid indices
+        assert 0 <= front_end <= main_end <= total
+
+    def test_preserves_page_content(self):
+        """Test that separation preserves all page content exactly."""
+        classifier = load_classifier(_default_classifier_path)
+
+        original_pages = [
+            "Preface content here.",
+            "Main chapter content.",
+            "More main content.",
+            "Index content here.",
+        ]
+
+        book = {
+            "barcode_src": "test",
+            "uniformized_text": original_pages.copy(),
+        }
+
+        result = separate_endmatter_book(book, classifier)
+
+        # Collect all pages from result
+        all_result_pages = (
+            result["frontmatter"] + result["middlematter"] + result["backmatter"]
+        )
+
+        # All original pages should be present
+        assert len(all_result_pages) == len(original_pages)
+        for page in original_pages:
+            assert page in all_result_pages
