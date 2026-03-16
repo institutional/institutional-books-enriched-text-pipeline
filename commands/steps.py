@@ -13,11 +13,15 @@ MAIN_STEPS = [
     "step04_dehyphenate",
     "step05_headerfooter_removal",
     "step06_pagenumber_removal",
-    # "step07_perplexity_filter",
-    # "step08_validate_segmenter",
-    # "step09_segment",
-    # "step10_stray_number_removal",
-    # "step11_chunk",
+    # "step07_validate_segmenter",
+    # "step08_segment",
+    # "step9_stray_number_removal",
+    # "step10_chunk",
+    # "step11_compute_perplexity",
+]
+
+PERPLEXITY_STEPS = [
+    # "step11_compute_perplexity",
 ]
 
 DEDUP_STEPS = [
@@ -30,7 +34,7 @@ POST_STEPS = [
     # "step15_clean",
 ]
 
-STEP_ORDER = MAIN_STEPS + DEDUP_STEPS + POST_STEPS
+STEP_ORDER = MAIN_STEPS + PERPLEXITY_STEPS + DEDUP_STEPS + POST_STEPS
 
 
 def validate_step_name(step_name: str) -> bool:
