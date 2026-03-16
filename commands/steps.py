@@ -11,7 +11,7 @@ MAIN_STEPS = [
     "step02_remove_duplicate_pages",
     "step03_separate_frontmatter_backmatter",
     "step04_dehyphenate",
-    # "step05_headerfooter_removal",
+    "step05_headerfooter_removal",
     # "step06_pagenumber_removal",
     # "step07_perplexity_filter",
     # "step08_validate_segmenter",
