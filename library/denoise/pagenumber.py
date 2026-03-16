@@ -8,6 +8,7 @@ from loguru import logger
 
 from const.config import PipelineConfig
 from const.types import BookJSON, NormPage
+from utils.text import numeric_count
 
 
 def remove_page_numbers_book(
@@ -35,18 +36,6 @@ def remove_page_numbers_book(
     result = book
     result["middlematter"] = cleaned_middlematter
     return result
-
-
-def numeric_count(segment: str) -> tuple[int, int]:
-    """Count numeric and non-numeric characters in a string."""
-    numeric = 0
-    nonnumeric = 0
-    for ch in segment:
-        if unicodedata.category(ch).startswith("N"):
-            numeric += 1
-        elif not ch.isspace():
-            nonnumeric += 1
-    return numeric, nonnumeric
 
 
 def is_probable_page_number_line(
