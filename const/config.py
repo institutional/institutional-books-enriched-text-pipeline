@@ -17,6 +17,8 @@ class ModelPaths:
     ngram: Path = Path("./DATA/pretrain/models")
     nupunkt: Path = Path("./DATA/pretrain/models")
     embedding: Path = Path("./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim")
+    mmem_classifier: Path = Path("./DATA/pretrain/models/mmem_classifier")
+    em_subclassifier: Path = Path("./DATA/pretrain/models/em_subclassifier")
 
 
 class ChunkingAlgorithm(str, Enum):
@@ -62,6 +64,16 @@ class PipelineConfig:
             embedding=Path(
                 data.get("model_paths", {}).get(
                     "embedding", "./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim"
+                )
+            ),
+            mmem_classifier=Path(
+                data.get("model_paths", {}).get(
+                    "mmem_classifier", "./DATA/pretrain/models/mmem_classifier"
+                )
+            ),
+            em_subclassifier=Path(
+                data.get("model_paths", {}).get(
+                    "em_subclassifier", "./DATA/pretrain/models/em_subclassifier"
                 )
             ),
         )

@@ -30,9 +30,9 @@ PERPLEXITY_STEPS = [
 DEDUP_STEPS = []
 
 POST_STEPS = [
-    # "step13_annotate_endmatter",
-    # "step14_add_metadata",
-    # "step15_clean",
+    "step13_annotate",
+    #    "step14_add_metadata",
+    #    "step15_clean",
 ]
 
 STEP_ORDER = MAIN_STEPS + PERPLEXITY_STEPS + DEDUP_STEPS + POST_STEPS

@@ -32,6 +32,11 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "pyyaml>=6.0.0",
     "imblearn>=0.0",
+    "tiktoken>=0.7.0",
+    "polyglot>=16.7.4",
+    "pyicu>=2.13.1",
+    "pycld2>=0.41",
+    "morfessor>=2.0.6",
 ]
 
 [project.optional-dependencies]
