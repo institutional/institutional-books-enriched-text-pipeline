@@ -64,11 +64,13 @@ def main(input_dir: Path, output_file: Path, threshold: int):
     logger.info(f"Loading simhash records from {len(simhash_files)} files...")
     records: list[tuple[str, int]] = []  # (doc_id, hash)
 
+    num_books = 0
     for path in tqdm(simhash_files):
         with open(path) as f:
             for line in f:
                 data = json.loads(line)
                 book_id = data["book_id"]
+                num_books += 1
                 # Create docid references, converting hex strings to ints
                 for i, h in enumerate(data["simhashes"]):
                     doc_id = f"{book_id}.{i}"
@@ -76,6 +78,7 @@ def main(input_dir: Path, output_file: Path, threshold: int):
                     records.append((doc_id, hash_int))
 
     logger.info(f"Loaded {len(records)} paragraph records")
+    logger.info(f"from {num_books} many books.")
 
     if not records:
         raise ValueError("No records found")
