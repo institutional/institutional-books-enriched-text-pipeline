@@ -24,11 +24,13 @@ PERPLEXITY_STEPS = [
 ]
 
 DEDUP_STEPS = [
-    # "step12_deduplicate"
+    # "step_pre12_compute_simhashes",
+    # "step12_deduplicate",
+    # "step_post12_annotate_duplictates",
 ]
 
 POST_STEPS = [
-    # "step13_annotate",
+    # "step13_annotate_endmatter",
     # "step14_add_metadata",
     # "step15_clean",
 ]
