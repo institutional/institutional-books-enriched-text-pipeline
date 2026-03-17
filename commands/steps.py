@@ -15,9 +15,8 @@ MAIN_STEPS = [
     "step06_pagenumber_removal",
     "step07_validate_segmenter",
     "step08_segment",
-    # "step9_stray_number_removal",
+    "step09_remove_stray_numbers",
     # "step10_chunk",
-    # "step11_compute_perplexity",
 ]
 
 PERPLEXITY_STEPS = [
