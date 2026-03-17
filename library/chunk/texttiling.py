@@ -1,7 +1,11 @@
 """
 texttiling.py - TextTiling-style topic chunking
 
-Extracted from prototype_pipeline/commands/chunk/tt_chunk.py
+This is very closely modelled on TextTiling, except with static embeddings
+instead of the adhoc embeddings from their paper. From far away: compute mean
+embeddings of each sentence, compute pairwise similarities (with some
+smoothing), and look for "valleys" and "peaks" to identify natural segmentation
+points.
 
 Algorithm:
 1. Compute embeddings for each sentence
@@ -9,12 +13,14 @@ Algorithm:
 3. Optionally smooth the similarity scores
 4. Identify valleys in similarity scores to determine chunk boundaries
 """
+
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from model2vec import StaticModel
 
+from const.config import PipelineConfig
+from const.types import BookJSON, NormText
 from library.chunk.utils import (
     load_embedding_model,
     compute_sentence_embeddings,
@@ -23,8 +29,8 @@ from library.chunk.utils import (
 
 
 def chunk_book_texttiling(
-    book: dict[str, Any],
-    config: dict[str, Any] | None = None,
+    book: BookJSON,
+    config: PipelineConfig,
     model: StaticModel | None = None,
     model_dir: Path | None = None,
     window_size: int = 5,
@@ -32,7 +38,7 @@ def chunk_book_texttiling(
     smooth_passes: int = 1,
     depth_std: float = 0.5,
     min_segment_len: int = 3,
-) -> dict[str, Any]:
+) -> BookJSON:
     """
     Chunk a book's sentences into topic-based paragraphs and sections.
 
@@ -46,22 +52,14 @@ def chunk_book_texttiling(
         smooth_passes: Number of smoothing passes
         depth_std: Depth threshold in std deviations (lower = longer segments)
         min_segment_len: Minimum sentences per segment
-
-    Returns:
-        Book dictionary with paragraph and section indices added
     """
     sentences = book.get("middlematter_sentences", [])
     if not sentences:
-        return book
+        raise ValueError("No middlematter found.")
 
-    # Load model if needed
     if model is None:
         if model_dir is None:
-            if config is None:
-                raise RuntimeError("No embedding model or config provided")
-            model_dir = Path(config.get("model_paths", {}).get(
-                "embedding", "./DATA/distilled_models/BAAI_bge-m3_m2v_512dim"
-            ))
+            model_dir = config.model_paths.embedding
         model = load_embedding_model(model_dir)
 
     # Segment into paragraphs
@@ -87,14 +85,14 @@ def chunk_book_texttiling(
         min_segment_len=min_segment_len,
     )
 
-    result = dict(book)
+    result = book
     result["subtopic_paragraph_start_indices"] = paragraph_starts
     result["subtopic_section_start_indices"] = section_starts
     return result
 
 
 def segment_sentences(
-    sentences: list[str],
+    sentences: list[NormText],
     model: StaticModel,
     window_size: int = 5,
     smooth_width: int = 3,
@@ -228,9 +226,7 @@ def choose_boundaries(
     threshold = mu - depth_std * sigma
 
     # Candidate gaps with depth above threshold
-    candidate_idxs = [
-        i for i, d in enumerate(depths) if d >= threshold and 0 < i < M - 1
-    ]
+    candidate_idxs = [i for i, d in enumerate(depths) if d >= threshold and 0 < i < M - 1]
 
     # Sort by depth descending, enforce min_gap
     candidate_idxs.sort(key=lambda i: depths[i], reverse=True)

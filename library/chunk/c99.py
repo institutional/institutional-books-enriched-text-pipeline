@@ -13,10 +13,12 @@ This module provides the Python wrapper and book-level interface.
 """
 
 from pathlib import Path
-from typing import Any
 
+from loguru import logger
 from model2vec import StaticModel
 
+from const.config import PipelineConfig
+from const.types import BookJSON, NormText
 from library.chunk.utils import (
     load_embedding_model,
     compute_sentence_embeddings,
@@ -25,15 +27,15 @@ from library.chunk.utils import (
 
 
 def chunk_book_c99(
-    book: dict[str, Any],
-    config: dict[str, Any] | None = None,
+    book: BookJSON,
+    config: PipelineConfig,
     model: StaticModel | None = None,
     model_dir: Path | None = None,
     band_width: int = 80,
     mask_size: int = 9,
     min_segment_len: int = 3,
     max_segments: int = 0,
-) -> dict[str, Any]:
+) -> BookJSON:
     """
     Chunk a book's sentences into topic-based paragraphs and sections.
 
@@ -46,24 +48,15 @@ def chunk_book_c99(
         mask_size: Neighborhood mask size for rank-based similarity
         min_segment_len: Minimum sentences per segment
         max_segments: Maximum segments (0 = no limit)
-
-    Returns:
-        Book dictionary with paragraph and section indices added
     """
     sentences = book.get("middlematter_sentences", [])
     if not sentences:
-        return book
+        raise ValueError("No middlematter found.")
 
     # Load model if needed
     if model is None:
         if model_dir is None:
-            if config is None:
-                raise RuntimeError("No embedding model or config provided")
-            model_dir = Path(
-                config.get("model_paths", {}).get(
-                    "embedding", "./DATA/distilled_models/BAAI_bge-m3_m2v_512dim"
-                )
-            )
+            model_dir = config.model_paths.embedding
         model = load_embedding_model(model_dir)
 
     # Segment into paragraphs
@@ -87,14 +80,14 @@ def chunk_book_c99(
         max_segments=max_segments,
     )
 
-    result = dict(book)
+    result = book
     result["subtopic_paragraph_start_indices"] = paragraph_starts
     result["subtopic_section_start_indices"] = section_starts
     return result
 
 
 def segment_sentences(
-    sentences: list[str],
+    sentences: list[NormText],
     model: StaticModel,
     band_width: int = 80,
     mask_size: int = 9,
@@ -124,6 +117,7 @@ def segment_sentences(
         segment_starts = [start for start, _ in segment_boundaries]
     except ImportError:
         # Fallback: treat entire text as one segment
+        logger.warning("C99 import not available. Using trivial chunking...")
         segment_starts = [0]
 
     return segment_starts

@@ -16,7 +16,7 @@ class ModelPaths:
 
     ngram: Path = Path("./DATA/pretrain/models")
     nupunkt: Path = Path("./DATA/pretrain/models")
-    embedding: Path = Path("./DATA/distilled_models/BAAI_bge-m3_m2v_512dim")
+    embedding: Path = Path("./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim")
 
 
 class ChunkingAlgorithm(str, Enum):
@@ -52,7 +52,7 @@ class PipelineConfig:
             nupunkt=Path(data.get("model_paths", {}).get("nupunkt", "./DATA/pretrain/models")),
             embedding=Path(
                 data.get("model_paths", {}).get(
-                    "embedding", "./DATA/distilled_models/BAAI_bge-m3_m2v_512dim"
+                    "embedding", "./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim"
                 )
             ),
         )

@@ -3,10 +3,13 @@ utils.py - Shared utilities for chunking
 
 Extracted from prototype_pipeline/commands/chunk/chunk_utils.py
 """
+
 from pathlib import Path
 
 import numpy as np
 from model2vec import StaticModel
+
+from const.types import NormText
 
 
 def load_embedding_model(model_dir: Path) -> StaticModel:
@@ -16,7 +19,7 @@ def load_embedding_model(model_dir: Path) -> StaticModel:
 
 
 def compute_sentence_embeddings(
-    sentences: list[str],
+    sentences: list[NormText],
     model: StaticModel,
 ) -> np.ndarray:
     """
@@ -33,7 +36,9 @@ def compute_sentence_embeddings(
     return embeddings.astype(np.float32)
 
 
-def segments_from_starts(sentences: list[str], segment_starts: list[int]) -> list[list[str]]:
+def segments_from_starts(
+    sentences: list[NormText], segment_starts: list[int]
+) -> list[list[NormText]]:
     """Build sentence segments from a list of segment start indices."""
     if not sentences:
         return []
@@ -42,7 +47,7 @@ def segments_from_starts(sentences: list[str], segment_starts: list[int]) -> lis
     if not starts or starts[0] != 0:
         starts = [0] + starts
 
-    segments: list[list[str]] = []
+    segments: list[list[NormText]] = []
     N = len(sentences)
     for i, start in enumerate(starts):
         end = starts[i + 1] if i + 1 < len(starts) else N

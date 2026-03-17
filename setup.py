@@ -67,7 +67,7 @@ def get_extensions():
         )
 
     # C99 chunking extension
-    c99_sources = ["extensions/c99_cpp/c99_banded.cpp"]
+    c99_sources = ["extensions/c99_banded_cpp/c99_banded.cpp"]
     if all(Path(src).exists() for src in c99_sources):
         extensions.append(
             Pybind11Extension(
