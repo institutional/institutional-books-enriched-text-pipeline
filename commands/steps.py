@@ -16,7 +16,7 @@ MAIN_STEPS = [
     "step07_validate_segmenter",
     "step08_segment",
     "step09_remove_stray_numbers",
-    # "step10_chunk",
+    "step10_chunk",
 ]
 
 PERPLEXITY_STEPS = [
