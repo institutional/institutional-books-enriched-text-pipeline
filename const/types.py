@@ -57,3 +57,8 @@ class ProcessStats(TypedDict):
 class BookSimhashes(TypedDict):
     book_id: str
     simhashes: list[SimhashHash]
+
+
+class BookPerplexities(TypedDict):
+    book_id: str
+    perplexities: list[float]

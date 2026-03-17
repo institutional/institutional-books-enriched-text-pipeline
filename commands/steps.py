@@ -20,7 +20,7 @@ MAIN_STEPS = [
 ]
 
 PERPLEXITY_STEPS = [
-    # "step11_compute_perplexity",
+    "step11_compute_perplexity",
 ]
 
 # Deduplication is handled by separate CLIs, not process_shard.py:

@@ -39,10 +39,19 @@ class PerplexityFilterConfig:
 
 
 @dataclass
+class PerplexityConfig:
+    """Perplexity computation configuration."""
+
+    enabled: bool = False
+    model_name: str = "Qwen/Qwen3-0.6B-Base"
+
+
+@dataclass
 class PipelineConfig:
     model_paths: ModelPaths = field(default_factory=ModelPaths)
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
     perplexity_filter: PerplexityFilterConfig = field(default_factory=PerplexityFilterConfig)
+    perplexity: PerplexityConfig = field(default_factory=PerplexityConfig)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PipelineConfig":
@@ -62,10 +71,15 @@ class PipelineConfig:
         perplexity_filter = PerplexityFilterConfig(
             enabled=data.get("perplexity_filter", {}).get("enabled", False),
         )
+        perplexity = PerplexityConfig(
+            enabled=data.get("perplexity", {}).get("enabled", False),
+            model_name=data.get("perplexity", {}).get("model_name", "Qwen/Qwen3-0.6B-Base"),
+        )
         return cls(
             model_paths=model_paths,
             chunking=chunking,
             perplexity_filter=perplexity_filter,
+            perplexity=perplexity,
         )
 
 
