@@ -94,7 +94,6 @@ def annotate_middlematter(
     if not section_starts:
         section_starts = [0]
 
-    num_paras = len(para_starts)
     num_sections = len(section_starts)
 
     # Build annotated sections

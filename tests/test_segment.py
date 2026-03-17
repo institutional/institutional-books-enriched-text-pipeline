@@ -1,12 +1,13 @@
 """Tests for library/segment/ segmenters."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from library.segment.nupunkt_segmenter import (
-    segment_book_nupunkt,
     locate_base_model_for_language,
+    segment_book_nupunkt,
 )
 from library.segment.sat_segmenter import (
     segment_book_sat,
@@ -15,7 +16,7 @@ from library.segment.sat_segmenter import (
 
 # Check for nupunkt availability
 try:
-    import nupunkt
+    import nupunkt  # noqa: F401
 
     _nupunkt_available = True
 except ImportError:
@@ -23,8 +24,8 @@ except ImportError:
 
 # Check for SAT/wtpsplit and GPU availability
 try:
-    from wtpsplit import SaT
     import torch
+    from wtpsplit import SaT  # noqa: F401
 
     _sat_available = torch.cuda.is_available() or torch.backends.mps.is_available()
 except ImportError:

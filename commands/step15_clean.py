@@ -22,7 +22,6 @@ from loguru import logger
 
 from const.types import BookJSON
 
-
 # Fields to keep in final output
 KEEP_FIELDS = {
     ## Core identifiers

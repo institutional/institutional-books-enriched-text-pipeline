@@ -22,8 +22,8 @@ from model2vec import StaticModel
 from const.config import PipelineConfig
 from const.types import BookJSON, NormText
 from library.chunk.utils import (
-    load_embedding_model,
     compute_sentence_embeddings,
+    load_embedding_model,
     segments_from_starts,
 )
 
@@ -194,17 +194,17 @@ def compute_depths(smoothed_scores: np.ndarray) -> np.ndarray:
 
     for i in range(M):
         # Find left peak
-        l = i
-        while l > 0 and smoothed_scores[l - 1] >= smoothed_scores[l]:
-            l -= 1
+        left = i
+        while left > 0 and smoothed_scores[left - 1] >= smoothed_scores[left]:
+            left -= 1
 
         # Find right peak
-        r = i
-        while r < M - 1 and smoothed_scores[r + 1] >= smoothed_scores[r]:
-            r += 1
+        right = i
+        while right < M - 1 and smoothed_scores[right + 1] >= smoothed_scores[right]:
+            right += 1
 
-        depth = (smoothed_scores[l] - smoothed_scores[i]) + (
-            smoothed_scores[r] - smoothed_scores[i]
+        depth = (smoothed_scores[left] - smoothed_scores[i]) + (
+            smoothed_scores[right] - smoothed_scores[i]
         )
         depths[i] = max(0.0, depth)
 

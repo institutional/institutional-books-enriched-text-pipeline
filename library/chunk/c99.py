@@ -20,8 +20,8 @@ from model2vec import StaticModel
 from const.config import PipelineConfig
 from const.types import BookJSON, NormText
 from library.chunk.utils import (
-    load_embedding_model,
     compute_sentence_embeddings,
+    load_embedding_model,
     segments_from_starts,
 )
 

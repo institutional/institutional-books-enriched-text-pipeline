@@ -69,7 +69,7 @@ class TestTextStats:
     def skip_if_no_tiktoken(self):
         """Skip test if tiktoken is not available."""
         try:
-            import tiktoken
+            import tiktoken  # noqa: F401
         except ImportError:
             pytest.skip("tiktoken not installed")
 

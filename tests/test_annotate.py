@@ -1,7 +1,11 @@
 """Tests for library/annotate modules."""
 
-import pytest
 
+from library.annotate.middlematter import (
+    annotate_middlematter,
+    get_paragraph_text,
+    get_section_para_range,
+)
 from library.annotate.tags import (
     build_duplicate_tag,
     build_endmatter_tag,
@@ -9,11 +13,6 @@ from library.annotate.tags import (
     build_representative_tag,
     build_section_tag,
     escape_xml,
-)
-from library.annotate.middlematter import (
-    annotate_middlematter,
-    get_paragraph_text,
-    get_section_para_range,
 )
 
 

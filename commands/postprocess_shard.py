@@ -20,7 +20,6 @@ from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
 from utils.atomic_write import atomic_write_jsonl
 
-
 # Fields to keep in final output (step15)
 KEEP_FIELDS = {
     "barcode_src",
@@ -326,7 +325,7 @@ def main(
         keep_indices=keep_indices,
     )
 
-    click.echo(f"\nPost-processing complete:")
+    click.echo("\nPost-processing complete:")
     click.echo(f"  Total books: {stats['total']}")
     click.echo(f"  Complete: {stats['complete']}")
     click.echo(f"  Incomplete: {stats['incomplete']}")

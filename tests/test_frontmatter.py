@@ -6,8 +6,8 @@ import pytest
 
 from library.denoise.frontmatter import (
     identify_frontmatter_backmatter,
-    separate_endmatter_book,
     load_classifier,
+    separate_endmatter_book,
 )
 
 
