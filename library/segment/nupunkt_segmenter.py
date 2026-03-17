@@ -4,6 +4,7 @@ nupunkt_segmenter.py - sentence segmentation using Nupunkt models
 For each book, adapts the base language model to that book's text.
 """
 
+import re
 from pathlib import Path
 from typing import cast
 
@@ -40,7 +41,11 @@ def segment_book_nupunkt(
         model_dir = config.model_paths.ngram if config else Path("./DATA/pretrain/models")
     model_file = locate_base_model_for_language(lang, model_dir)
 
-    combined_middlematter = "\n".join(middlematter_pages)
+    # remove remaining newlines
+    combined_middlematter = " ".join(middlematter_pages)
+    combined_middlematter = combined_middlematter.replace("\n", " ")
+    combined_middlematter = re.sub(r" +", " ", combined_middlematter)
+
     combined_middlematter = cast(NormText, combined_middlematter)
     if adapt_model:
         tokenizer = adapt_model_to_book_inmemory(

@@ -4,6 +4,7 @@ sat.py - sentence segmentation using Segment-Any-Text
 This is slow and wants a GPU.
 """
 
+import re
 from typing import cast, no_type_check
 
 from loguru import logger
@@ -34,7 +35,11 @@ def segment_book_sat(
     if sat_model is None:
         sat_model = get_sat_model()
 
-    combined_middlematter = "\n".join(middlematter_pages)
+    # remove remaining newlines
+    combined_middlematter = " ".join(middlematter_pages)
+    combined_middlematter = combined_middlematter.replace("\n", " ")
+    combined_middlematter = re.sub(r" +", " ", combined_middlematter)
+
     combined_middlematter = cast(NormText, combined_middlematter)
     segments = segment_text_with_sat(sat_model, combined_middlematter)
 
