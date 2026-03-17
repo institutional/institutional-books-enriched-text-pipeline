@@ -149,7 +149,11 @@ class TestGetSectionParaRange:
 
 class TestAnnotateMiddlematter:
     def test_empty_book(self):
-        book = {"middlematter_sentences": [], "subtopic_paragraph_start_indices": []}
+        book = {
+            "barcode_src": "test",
+            "middlematter_sentences": [],
+            "subtopic_paragraph_start_indices": [],
+        }
         result = annotate_middlematter(book)
         assert result == ""
 

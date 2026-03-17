@@ -62,3 +62,32 @@ class BookSimhashes(TypedDict):
 class BookPerplexities(TypedDict):
     book_id: str
     perplexities: list[float]
+
+
+class TextStats(TypedDict):
+    """Text statistics for a book's middlematter."""
+
+    token_count: int
+    char_count: int
+    word_count: int
+    sentence_count: int
+    paragraph_count: int
+    section_count: int
+    bigram_count: int
+    bigram_count_unique: int
+    trigram_count: int
+    trigram_count_unique: int
+    tokenizability_o200k_base_ratio: float
+
+
+class PerplexityStats(TypedDict, total=False):
+    """Perplexity statistics for a book. All fields optional (empty if no valid perplexities)."""
+
+    perplexity_min: float
+    perplexity_max: float
+    perplexity_median: float
+    perplexity_avg: float
+    perplexity_p10: float
+    perplexity_p30: float
+    perplexity_p70: float
+    perplexity_p90: float
