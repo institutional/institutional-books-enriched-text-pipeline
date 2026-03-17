@@ -52,3 +52,8 @@ class ProcessStats(TypedDict):
     total: int
     complete: int
     incomplete: int
+
+
+class BookSimhashes(TypedDict):
+    book_id: str
+    simhashes: list[SimhashHash]

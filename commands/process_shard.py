@@ -120,7 +120,7 @@ def process_shard(
                 continue
 
             book_id = book.get("barcode_src", f"shard_{shard_id}_line_{line_num}")
-            logger.info(f"Processing book {book_id}")
+            logger.info(f"Processing book {book_id}  (book #{line_num} in shard)")
 
             result_book, last_step, error_msg = process_book_through_steps(
                 book, config, segmenter, steps
