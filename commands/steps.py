@@ -23,11 +23,11 @@ PERPLEXITY_STEPS = [
     # "step11_compute_perplexity",
 ]
 
-DEDUP_STEPS = [
-    # "step_pre12_compute_simhashes",
-    # "step12_deduplicate",
-    # "step_post12_annotate_duplictates",
-]
+# Deduplication is handled by separate CLIs, not process_shard.py:
+#   1. dedup_compute_simhashes.py - compute simhashes per shard (parallel)
+#   2. dedup_find_duplicates.py - find duplicates across all shards (single)
+#   3. dedup_annotate.py - annotate books with duplicate info (parallel)
+DEDUP_STEPS = []
 
 POST_STEPS = [
     # "step13_annotate_endmatter",
