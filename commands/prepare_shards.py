@@ -41,8 +41,9 @@ def determine_segmenter(book: BookJSON) -> str:
     return "nupunkt" if is_nupunkt_language(lang) else "sat"
 
 
-def make_shard_filename(shard_id: int, segmenter: str) -> str:
-    return f"shard{shard_id:04d}_{segmenter}.jsonl"
+def make_shard_filename(shard_id: int, segmenter: str, use_gzip: bool = False) -> str:
+    ext = ".jsonl.gz" if use_gzip else ".jsonl"
+    return f"shard{shard_id:04d}_{segmenter}{ext}"
 
 
 def prepare_shards(
@@ -51,6 +52,7 @@ def prepare_shards(
     dataset_name: str = "institutional/institutional-books-1.0",
     split: str = "train",
     max_books: int | None = None,
+    use_gzip: bool = False,
 ) -> ShardStats:
     """
     Stream HF dataset into shards and return statistics dict with counts.
@@ -78,7 +80,7 @@ def prepare_shards(
         shard_id = next_shard_id
         next_shard_id += 1
 
-        filename = make_shard_filename(shard_id, segmenter)
+        filename = make_shard_filename(shard_id, segmenter, use_gzip)
         shard_path = raw_dir / filename
         count = atomic_write_jsonl(iter(queue), shard_path)
         manifest_entries.append(
@@ -174,7 +176,12 @@ def prepare_shards(
     default=None,
     help="Maximum number of books to process (default None, i.e. no limit))",
 )
-def main(output_dir: Path, shard_size: int, dataset: str, split: str, max_books: int | None):
+@click.option(
+    "--gzip/--no-gzip",
+    default=False,
+    help="Compress shard files with gzip (default: no compression)",
+)
+def main(output_dir: Path, shard_size: int, dataset: str, split: str, max_books: int | None, gzip: bool):
     """
     Downloads books and partitions them into shards based on Nupunkt compatability.
     """
@@ -184,6 +191,8 @@ def main(output_dir: Path, shard_size: int, dataset: str, split: str, max_books:
 
     if max_books:
         click.echo(f"Max books: {max_books}")
+    if gzip:
+        click.echo("Compression: gzip enabled")
 
     stats = prepare_shards(
         output_dir=output_dir,
@@ -191,6 +200,7 @@ def main(output_dir: Path, shard_size: int, dataset: str, split: str, max_books:
         dataset_name=dataset,
         split=split,
         max_books=max_books,
+        use_gzip=gzip,
     )
 
     click.echo("\nResults:")

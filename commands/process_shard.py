@@ -23,6 +23,7 @@ from const.types import (
     StepFunction,
 )
 from utils.atomic_write import atomic_write_jsonl
+from utils.jsonl_io import open_jsonl
 
 
 def setup_logging(log_file: Path | None):
@@ -111,7 +112,7 @@ def process_shard(
     complete_books: list[BookJSON] = []
     incomplete_books: list[BookJSON] = []
 
-    with open(input_file) as f:
+    with open_jsonl(input_file, "r") as f:
         for line_num, line in enumerate(f, 1):
             try:
                 book = json.loads(line)
@@ -140,8 +141,11 @@ def process_shard(
                 incomplete_books.append(result_book)
                 logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
 
-    # Write outputs atomically
-    complete_path = output_dir / f"shard{shard_id}.complete.jsonl"
+    # Write outputs atomically (incomplete always uncompressed for inspection)
+    if config.use_gzip:
+        complete_path = output_dir / f"shard{shard_id}.complete.jsonl.gz"
+    else:
+        complete_path = output_dir / f"shard{shard_id}.complete.jsonl"
     incomplete_path = output_dir / f"shard{shard_id}.incomplete.jsonl"
     complete_count = atomic_write_jsonl(iter(complete_books), complete_path)
     incomplete_count = atomic_write_jsonl(iter(incomplete_books), incomplete_path)
@@ -217,12 +221,16 @@ def main(
     Reads books from input shard, processes each through the configured
     steps, and writes results to complete/incomplete output files.
     """
-    input_file = input_dir / f"shard{shard_id}_{segmenter}.jsonl"
+    # Try gzipped first, then fall back to uncompressed
+    input_file = input_dir / f"shard{shard_id}_{segmenter}.jsonl.gz"
     if not input_file.exists():
-        # Try without segmenter suffix
+        input_file = input_dir / f"shard{shard_id}_{segmenter}.jsonl"
+    if not input_file.exists():
+        input_file = input_dir / f"shard{shard_id}.jsonl.gz"
+    if not input_file.exists():
         input_file = input_dir / f"shard{shard_id}.jsonl"
-        if not input_file.exists():
-            raise click.ClickException(f"Input file not found: {input_file}")
+    if not input_file.exists():
+        raise click.ClickException(f"Input file not found for shard {shard_id}")
 
     # Load config
     config = load_config(config_file) if config_file else PipelineConfig()

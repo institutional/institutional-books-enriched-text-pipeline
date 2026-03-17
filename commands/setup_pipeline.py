@@ -216,9 +216,120 @@ def distill_model2vec(
     return save_dir
 
 
-# TODO: Make model2vec distilled model and classification model available and add
-# a tool to download them by default. Then update this aspect of the pipe to
-# get those.
+def train_m2v_classifier(
+    training_file: Path,
+    model_dir: Path,
+    output_dir: Path,
+    test_size: float = 0.2,
+    seed: int = 42,
+) -> None:
+    """
+    Train a model2vec classifier.
+
+    Args:
+        training_file: Path to JSONL training data
+        model_dir: Path to distilled model2vec model
+        output_dir: Directory to save trained classifier
+        test_size: Fraction of data to use for testing
+        seed: Random seed for reproducibility
+    """
+    from utils.train_m2v_classifier import load_and_split_json, train_classifier
+
+    output_dir = Path(output_dir)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Training classifier: {output_dir}")
+
+    # Load and split data
+    X_train, y_train, X_test, y_test = load_and_split_json(
+        training_file, test_size=test_size, seed=seed
+    )
+    logger.info(
+        f"Loaded {len(X_train) + len(X_test)} examples. Train: {len(X_train)}, Test: {len(X_test)}"
+    )
+
+    # Train classifier
+    classifier = train_classifier(X_train, y_train, model_name=str(model_dir))
+
+    # Evaluate and save
+    results = classifier.evaluate(X_test, y_test)
+    logger.info(f"Training results:\n{results}")
+
+    logger.info("Saving trained classifier pipeline...")
+    pipeline = classifier.to_pipeline()
+    pipeline.save_pretrained(str(output_dir))
+    logger.info(f"Classifier training complete: {output_dir}")
+
+
+def train_endmatter_classifiers(
+    output_dir: Path,
+    model_name: str = "BAAI/bge-m3",
+    model_dim: int = 512,
+    overwrite: bool = False,
+) -> None:
+    """
+    Train the endmatter classifiers (mmem_classifier and em_subclassifier).
+
+    Requires:
+        - Distilled model2vec model at output_dir/<model_name>_m2v_<dim>dim
+        - Training data at DATA/release_assets/m2v_training_data/
+
+    Args:
+        output_dir: Directory containing distilled model and for classifier output
+        model_name: Base model name used for distillation
+        model_dim: Dimension used for distillation
+        overwrite: If True, retrain even if classifiers exist
+    """
+    from utils.get_m2v_training_data import (
+        get_subclassifier_training_path,
+        get_topclassifier_training_path,
+        get_training_data,
+    )
+
+    # Check training data is available
+    try:
+        get_training_data()
+    except FileNotFoundError as e:
+        logger.warning(f"Skipping classifier training: {e}")
+        return
+
+    # Build paths
+    full_model_name = model_name.replace("/", "_") + f"_m2v_{model_dim}dim"
+    distilled_model_dir = output_dir / full_model_name
+
+    if not distilled_model_dir.exists():
+        logger.error(f"Distilled model not found: {distilled_model_dir}")
+        logger.error("Cannot train classifiers without distilled model.")
+        return
+
+    # Train mmem_classifier (top classifier for frontmatter/endmatter detection)
+    mmem_classifier_dir = output_dir / "mmem_classifier"
+    if mmem_classifier_dir.exists() and not overwrite:
+        logger.info(f"mmem_classifier exists, skipping: {mmem_classifier_dir}")
+    else:
+        logger.info("Training mmem_classifier (frontmatter/endmatter top classifier)...")
+        try:
+            train_m2v_classifier(
+                training_file=get_topclassifier_training_path(),
+                model_dir=distilled_model_dir,
+                output_dir=mmem_classifier_dir,
+            )
+        except Exception as e:
+            logger.error(f"mmem_classifier training failed: {e}")
+
+    # Train em_subclassifier (endmatter subtype classifier)
+    em_subclassifier_dir = output_dir / "em_subclassifier"
+    if em_subclassifier_dir.exists() and not overwrite:
+        logger.info(f"em_subclassifier exists, skipping: {em_subclassifier_dir}")
+    else:
+        logger.info("Training em_subclassifier (endmatter subtype classifier)...")
+        try:
+            train_m2v_classifier(
+                training_file=get_subclassifier_training_path(),
+                model_dir=distilled_model_dir,
+                output_dir=em_subclassifier_dir,
+            )
+        except Exception as e:
+            logger.error(f"em_subclassifier training failed: {e}")
 
 
 def setup_pipeline(
@@ -300,7 +411,7 @@ def setup_pipeline(
     logger.info(f"{ngram_models_built=}")
     logger.info(f"{nupunkt_models_trained=}")
 
-    # Distill model2vec
+    # Distill model2vec and train classifiers
     if distill_model:
         logger.info(f"\n{'=' * 60}")
         logger.info("Distilling model2vec model")
@@ -310,6 +421,19 @@ def setup_pipeline(
             distill_model2vec(output_dir, model_name, model_dim)
         except Exception as e:
             logger.error(f"Model distillation failed: {e}")
+
+        # Train endmatter classifiers after distillation
+        logger.info(f"\n{'=' * 60}")
+        logger.info("Training endmatter classifiers")
+        logger.info(f"{'=' * 60}")
+
+        train_endmatter_classifiers(
+            output_dir=output_dir,
+            model_name=model_name,
+            model_dim=model_dim,
+            overwrite=overwrite,
+        )
+
     logger.info("\nSetup pipeline complete!")
 
 

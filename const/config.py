@@ -54,6 +54,7 @@ class PipelineConfig:
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
     perplexity_filter: PerplexityFilterConfig = field(default_factory=PerplexityFilterConfig)
     perplexity: PerplexityConfig = field(default_factory=PerplexityConfig)
+    use_gzip: bool = False  # Compress shard files with gzip
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PipelineConfig":
@@ -92,6 +93,7 @@ class PipelineConfig:
             chunking=chunking,
             perplexity_filter=perplexity_filter,
             perplexity=perplexity,
+            use_gzip=data.get("use_gzip", False),
         )
 
 

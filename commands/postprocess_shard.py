@@ -19,6 +19,7 @@ from library.annotate.middlematter import annotate_middlematter
 from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
 from utils.atomic_write import atomic_write_jsonl
+from utils.jsonl_io import open_jsonl
 
 # Fields to keep in final output (step15)
 KEEP_FIELDS = {
@@ -194,7 +195,7 @@ def postprocess_shard(
     complete_books: list[BookJSON] = []
     incomplete_books: list[BookJSON] = []
 
-    with open(input_file) as f:
+    with open_jsonl(input_file, "r") as f:
         for line_num, line in enumerate(f, 1):
             try:
                 book = json.loads(line)
