@@ -75,8 +75,9 @@ class TestStep13CLI:
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        assert len(output_book["annotated_frontmatter"]) == 2
-        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"][0]
+        # annotated_frontmatter is now a single string with pages joined by newlines
+        assert output_book["annotated_frontmatter"].count('<idi-endmatter type="TOC_INDEX">') == 2
+        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"]
 
     @patch("commands.step13_annotate.load_em_subclassifier")
     def test_annotates_middlematter(self, mock_load_classifier, tmp_path: Path):

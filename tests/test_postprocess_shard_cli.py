@@ -185,8 +185,8 @@ class TestPostprocessShardCLI:
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        # Check frontmatter has endmatter tags
-        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"][0]
+        # Check frontmatter has endmatter tags (now a single string)
+        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"]
         # Check middlematter has section/paragraph tags
         assert "<idi-section>" in output_book["annotated_middlematter"]
         assert "<idi-paragraph>" in output_book["annotated_middlematter"]

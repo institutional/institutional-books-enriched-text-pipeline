@@ -39,26 +39,31 @@ def load_em_subclassifier(path: Path) -> EndmatterClassifier:
 def annotate_endmatter_pages(
     pages: list[NormPage],
     classifier: EndmatterClassifier,
-) -> list[str]:
+) -> str:
     """
     Annotate endmatter pages with their classification tags.
+
+    Empty pages are filtered out. Results are joined with newlines.
 
     Args:
         pages: List of page texts (frontmatter or backmatter).
         classifier: Endmatter subclassifier model.
 
     Returns:
-        List of tagged page strings, one per page.
+        Single string of tagged pages joined by newlines, or empty string if no pages.
     """
-    if not pages:
-        return []
+    # Filter out empty pages
+    non_empty_pages = [p for p in pages if p and p.strip()]
 
-    # Classify all pages
-    predictions = classifier.predict(pages)
+    if not non_empty_pages:
+        return ""
+
+    # Classify all non-empty pages
+    predictions = classifier.predict(non_empty_pages)
 
     # Build tagged output for each page
     tagged_pages = []
-    for page, label in zip(pages, predictions):
+    for page, label in zip(non_empty_pages, predictions):
         tagged_pages.append(build_endmatter_tag(page, label))
 
-    return tagged_pages
+    return "\n".join(tagged_pages)

@@ -18,9 +18,9 @@ class TestStep15CLI:
             {
                 "barcode_src": "book1",
                 "language_gen": "eng",
-                "annotated_frontmatter": ["<idi-endmatter>...</idi-endmatter>"],
+                "annotated_frontmatter": "<idi-endmatter>...</idi-endmatter>",
                 "annotated_middlematter": "<idi-section>...</idi-section>",
-                "annotated_backmatter": [],
+                "annotated_backmatter": "",
                 "metadata": {"token_count": 100},
                 "middlematter_sentences": ["A.", "B."],
                 "subtopic_paragraph_start_indices": [0, 1],

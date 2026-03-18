@@ -48,20 +48,14 @@ def step13_annotate_book(
 
     # Annotate frontmatter
     frontmatter = book.get("frontmatter", [])
-    if frontmatter:
-        book["annotated_frontmatter"] = annotate_endmatter_pages(frontmatter, em_classifier)
-    else:
-        book["annotated_frontmatter"] = []
+    book["annotated_frontmatter"] = annotate_endmatter_pages(frontmatter, em_classifier)
 
     # Annotate middlematter
     book["annotated_middlematter"] = annotate_middlematter(book, perplexities)
 
     # Annotate backmatter
     backmatter = book.get("backmatter", [])
-    if backmatter:
-        book["annotated_backmatter"] = annotate_endmatter_pages(backmatter, em_classifier)
-    else:
-        book["annotated_backmatter"] = []
+    book["annotated_backmatter"] = annotate_endmatter_pages(backmatter, em_classifier)
 
     return book
 
