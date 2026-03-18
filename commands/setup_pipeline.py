@@ -8,7 +8,6 @@ classifiers (and optionally distills another model).
 In a standard workflow, this should be run after `prepare_shards.py`.
 """
 
-import json
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -22,16 +21,21 @@ from const.languages import is_nupunkt_language
 from const.types import BookJSON, BooksByLangDict, NormPage, NormText, RawPage
 from library.denoise.ngrams import build_ngram_stats, save_ngram_stats
 from library.denoise.uniformize import normalize_text
+from utils.jsonl_io import iter_jsonl
 
 
 def stream_books_from_shards(shard_dir: Path) -> Iterator[BookJSON]:
     """
     Stream book records from all shard files in a directory.
+
+    Handles both .jsonl and .jsonl.gz files.
     """
-    for shard_path in sorted(shard_dir.glob("*.jsonl")):
-        with open(shard_path, "r") as f:
-            for line in f:
-                yield json.loads(line)
+    # Find all shard files (both compressed and uncompressed)
+    shard_paths = sorted(
+        set(shard_dir.glob("*.jsonl")) | set(shard_dir.glob("*.jsonl.gz"))
+    )
+    for shard_path in shard_paths:
+        yield from iter_jsonl(shard_path)
 
 
 def sample_books_by_language(shard_dir: Path, max_books_per_language: int = 30) -> BooksByLangDict:
