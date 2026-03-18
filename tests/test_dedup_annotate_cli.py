@@ -27,8 +27,7 @@ class TestDedupAnnotateCLI:
 
         clusters = {
             "clusters": {},
-            "to_keep": ["book1.0", "book1.1"],
-            "statistics": {"total_records": 2},
+                        "statistics": {"total_records": 2},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -61,8 +60,7 @@ class TestDedupAnnotateCLI:
         # book1.0 is a duplicate of book2.5 (representative)
         clusters = {
             "clusters": {"book2.5": ["book2.5", "book1.0"]},
-            "to_keep": ["book2.5"],
-            "statistics": {"total_records": 2},
+                        "statistics": {"total_records": 2},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -95,8 +93,7 @@ class TestDedupAnnotateCLI:
         # book1.0 is the representative of its cluster
         clusters = {
             "clusters": {"book1.0": ["book1.0", "book2.3"]},
-            "to_keep": ["book1.0"],
-            "statistics": {"total_records": 2},
+                        "statistics": {"total_records": 2},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -130,8 +127,7 @@ class TestDedupAnnotateCLI:
 
         clusters = {
             "clusters": {},
-            "to_keep": ["book1.0"],
-            "statistics": {"total_records": 1},
+                        "statistics": {"total_records": 1},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -173,8 +169,7 @@ class TestDedupAnnotateCLI:
 
         clusters = {
             "clusters": {},
-            "to_keep": ["book1.0", "book2.0", "book3.0"],
-            "statistics": {"total_records": 3},
+                        "statistics": {"total_records": 3},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -208,8 +203,7 @@ class TestDedupAnnotateCLI:
 
         clusters = {
             "clusters": {},
-            "to_keep": ["book1.0"],
-            "statistics": {"total_records": 1},
+                        "statistics": {"total_records": 1},
         }
         clusters_file.write_text(json.dumps(clusters))
 
@@ -235,7 +229,7 @@ class TestDedupAnnotateCLI:
         shard_file = tmp_path / "nonexistent.jsonl"
         clusters_file = tmp_path / "clusters.json"
 
-        clusters = {"clusters": {}, "to_keep": [], "statistics": {}}
+        clusters = {"clusters": {},  "statistics": {}}
         clusters_file.write_text(json.dumps(clusters))
 
         runner = CliRunner()

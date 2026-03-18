@@ -48,8 +48,7 @@ def main(input_dir: Path, output_file: Path, threshold: int):
     Output format (clusters.json):
         {
             "clusters": {"rep_doc_id": ["member1", "member2", ...]},
-            "to_keep": ["doc_id1", "doc_id2", ...],
-            "statistics": {"total_records": N, "duplicate_pairs": N, ...}
+            "statistics": {"total_records": N, "duplicate_pairs": N, "clusters": N}
         }
 
     Example:
@@ -146,22 +145,12 @@ def main(input_dir: Path, output_file: Path, threshold: int):
     # Filter to clusters with actual duplicates
     clusters = {k: sorted(v) for k, v in raw_clusters.items() if len(v) > 1}
 
-    # Determine which docs to keep
-    to_keep = set(hash_lookup.keys())
-    for rep, members in clusters.items():
-        for m in members:
-            if m != rep:
-                to_keep.discard(m)
-
     output_data = {
         "clusters": clusters,
-        "to_keep": sorted(to_keep),
         "statistics": {
             "total_records": len(records),
             "duplicate_pairs": duplicates_found,
             "clusters": len(clusters),
-            "to_keep": len(to_keep),
-            "to_remove": len(records) - len(to_keep),
         },
     }
     logger.debug("Writing dedup information to files...")
@@ -169,7 +158,7 @@ def main(input_dir: Path, output_file: Path, threshold: int):
     logger.info(f"Clusters written to {output_file}")
     logger.info(
         f"Statistics: {output_data['statistics']['clusters']} clusters, "
-        f"{output_data['statistics']['to_remove']} duplicates to remove"
+        f"{output_data['statistics']['duplicate_pairs']} duplicate pairs"
     )
 
 

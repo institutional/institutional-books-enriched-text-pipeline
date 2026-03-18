@@ -32,7 +32,6 @@ class TestDedupFindDuplicatesCLI:
 
         output_data = json.loads(output_file.read_text())
         assert "clusters" in output_data
-        assert "to_keep" in output_data
         assert "statistics" in output_data
 
     def test_output_format(self, tmp_path: Path):
@@ -57,8 +56,6 @@ class TestDedupFindDuplicatesCLI:
         assert "total_records" in stats
         assert "duplicate_pairs" in stats
         assert "clusters" in stats
-        assert "to_keep" in stats
-        assert "to_remove" in stats
 
     def test_finds_exact_duplicates(self, tmp_path: Path):
         """Test that identical simhashes are detected as duplicates."""
@@ -85,7 +82,6 @@ class TestDedupFindDuplicatesCLI:
         # Should have 1 cluster with 2 members
         assert output_data["statistics"]["clusters"] == 1
         assert output_data["statistics"]["duplicate_pairs"] == 1
-        assert output_data["statistics"]["to_remove"] == 1
 
     def test_custom_threshold(self, tmp_path: Path):
         """Test that threshold parameter affects duplicate detection."""
@@ -139,9 +135,12 @@ class TestDedupFindDuplicatesCLI:
         assert result.exit_code == 0
 
         output_data = json.loads(output_file.read_text())
-        # Check doc_ids in to_keep include book_id.index format
-        to_keep = output_data["to_keep"]
-        assert any("." in doc_id for doc_id in to_keep)
+        # Check doc_ids in clusters use book_id.index format
+        clusters = output_data["clusters"]
+        assert len(clusters) >= 1  # At least one cluster for the identical hashes
+        for rep, members in clusters.items():
+            assert "." in rep  # Rep should be book_id.index format
+            assert all("." in m for m in members)
 
     def test_empty_input_directory(self, tmp_path: Path):
         """Test that CLI fails gracefully with empty input directory."""
