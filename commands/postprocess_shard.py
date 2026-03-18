@@ -19,7 +19,7 @@ from library.annotate.middlematter import annotate_middlematter
 from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
 from utils.atomic_write import atomic_write_jsonl
-from utils.jsonl_io import open_jsonl
+from utils.jsonl_io import load_perplexity_map, open_jsonl
 
 # Fields to keep in final output (step15)
 KEEP_FIELDS = {
@@ -33,20 +33,6 @@ KEEP_FIELDS = {
     "subtopic_section_start_indices",
     "middlematter_sentences",
 }
-
-
-def load_perplexity_map(perplexity_file: Path | None) -> dict[str, list[float]]:
-    """Load perplexity values from a .perplexity.jsonl file."""
-    if perplexity_file is None or not perplexity_file.exists():
-        return {}
-
-    perp_map: dict[str, list[float]] = {}
-    with open(perplexity_file) as f:
-        for line in f:
-            record = json.loads(line)
-            perp_map[record["book_id"]] = record["perplexities"]
-
-    return perp_map
 
 
 def step13_annotate_book(

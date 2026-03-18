@@ -19,28 +19,7 @@ from loguru import logger
 from const.types import BookJSON
 from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
-
-
-def load_perplexity_map(perplexity_file: Path | None) -> dict[str, list[float]]:
-    """
-    Load perplexity values from a .perplexity.jsonl file.
-
-    Args:
-        perplexity_file: Path to perplexity file, or None.
-
-    Returns:
-        Dict mapping book_id to list of perplexities.
-    """
-    if perplexity_file is None or not perplexity_file.exists():
-        return {}
-
-    perp_map: dict[str, list[float]] = {}
-    with open(perplexity_file) as f:
-        for line in f:
-            record = json.loads(line)
-            perp_map[record["book_id"]] = record["perplexities"]
-
-    return perp_map
+from utils.jsonl_io import load_perplexity_map
 
 
 def add_metadata(

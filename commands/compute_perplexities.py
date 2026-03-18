@@ -77,7 +77,7 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
     books_skipped = 0
     total_paragraphs = 0
 
-    with open_jsonl(input_file, "r") as f_in, open(output_file, "w") as f_out:
+    with open_jsonl(input_file, "r") as f_in, open_jsonl(output_file, "w") as f_out:
         for line in f_in:
             book = json.loads(line)
             book_id = book.get("barcode_src", "")

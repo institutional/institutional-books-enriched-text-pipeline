@@ -81,7 +81,7 @@ def annotate_middlematter(
     section_starts = book.get("subtopic_section_start_indices", [])
     book_id = book.get("barcode_src", "UNKNOWN")
     if book_id == "UNKNOWN":
-        raise ValueError("Unkown book_id in middlematter annotation")
+        raise ValueError("Unknown book_id in middlematter annotation")
 
     # Get duplicate/representative info
     duplicate_paras = book.get("duplicate_paragraphs", {})

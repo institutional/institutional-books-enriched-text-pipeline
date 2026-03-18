@@ -95,3 +95,39 @@ def strip_gz_suffix(path: Path | str) -> Path:
     if path.name.endswith(".jsonl.gz"):
         return Path(str(path)[:-3])  # Remove .gz
     return path
+
+
+def load_perplexity_map(perplexity_file: Path | str | None) -> dict[str, list[float]]:
+    """
+    Load perplexity values from a .perplexity.jsonl file.
+
+    Handles gzip compression automatically. Skips malformed JSON lines with a warning.
+
+    Args:
+        perplexity_file: Path to the perplexity file, or None
+
+    Returns:
+        Dict mapping book_id to list of perplexity values
+    """
+    from loguru import logger
+
+    if perplexity_file is None:
+        return {}
+
+    path = Path(perplexity_file)
+    if not path.exists():
+        return {}
+
+    perp_map: dict[str, list[float]] = {}
+    with open_jsonl(path, "r") as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                perp_map[record["book_id"]] = record["perplexities"]
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Skipping malformed line {line_num} in {path}: {e}")
+
+    return perp_map

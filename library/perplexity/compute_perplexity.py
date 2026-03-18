@@ -3,9 +3,11 @@ compute_perplexity.py - core perplexity computation logic.
 """
 
 import math
+import sys
 
 import torch
 from loguru import logger
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from const.types import BookJSON, BookPerplexities
@@ -18,7 +20,7 @@ def load_perplexity_model(
     """Load a causal LM model and tokenizer for perplexity computation."""
     logger.info(f"Loading model {model_name} and tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16)
     model.to(device)
     model.eval()
     logger.info(f"Model ready on {device}.")
@@ -86,8 +88,11 @@ def compute_perplexities_in_book(
     ]
 
     perplexities: list[float] = []
-    for para in paragraphs:
+    # disable tqdm when not run interactively
+    for idx, para in tqdm(enumerate(paragraphs), disable=not sys.stderr.isatty()):
         ppl = compute_perplexity(para, model, tokenizer, device)
         perplexities.append(ppl)
+        if idx % 500 == 499:
+            logger.debug(f"Processed {idx} paragraphs from book.")
 
     return BookPerplexities(book_id=book_id, perplexities=perplexities)
