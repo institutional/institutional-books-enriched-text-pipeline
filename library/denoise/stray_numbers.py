@@ -15,7 +15,7 @@ def remove_stray_numbers_book(
     book: BookJSON,
     config: PipelineConfig,
     threshold: float = 0.9,
-    min_length: int = 2,
+    min_length: int = 1,
 ) -> BookJSON:
     """
     Remove stray number sentences from a book's middlematter_sentences.
@@ -24,7 +24,7 @@ def remove_stray_numbers_book(
         book: Book dictionary with 'middlematter_sentences' field
         config: Pipeline configuration (unused for this step)
         threshold: Fraction of numeric chars to trigger removal (default: 0.9)
-        min_length: Minimum sentence length to consider (default: 2)
+        min_length: Minimum sentence length to consider (default: 1)
     """
     sentences = book.get("middlematter_sentences", [])
     if not sentences:
@@ -53,7 +53,8 @@ def is_probable_stray_number_fragment(
     The fragment is expected to be a whole sentence.
 
     Heuristic: if the fraction of numeric characters is >= threshold,
-    then it's probably a stray number fragment.
+    then it's probably a stray number fragment. Alternately, if there is only
+    one nonnumeric character, it's probably a stray number fragment.
     """
     if len(fragment) < min_length:
         return False
@@ -61,6 +62,8 @@ def is_probable_stray_number_fragment(
     total = numeric + nonnumeric
     if total == 0:
         return False
+    if nonnumeric <= 1:
+        return True
     return (numeric / total) >= threshold
 
 

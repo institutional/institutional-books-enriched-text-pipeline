@@ -48,9 +48,10 @@ class TestIsProbableStrayNumberFragment:
 
     def test_number_with_punctuation(self):
         # 90% threshold: "123." has 3 numeric, 1 non-numeric = 75% numeric
-        assert not is_probable_stray_number_fragment("123.")
+        # but only 1 non-numeric
+        assert is_probable_stray_number_fragment("123.")
         # "12345." has 5 numeric, 1 non-numeric = 83% numeric
-        assert not is_probable_stray_number_fragment("12345.")
+        assert not is_probable_stray_number_fragment("1122334455..")
         # "123456789." has 9 numeric, 1 non-numeric = 90% numeric
         assert is_probable_stray_number_fragment("123456789.")
 
@@ -72,8 +73,7 @@ class TestIsProbableStrayNumberFragment:
         assert not is_probable_stray_number_fragment("   ")
 
     def test_custom_threshold(self):
-        # "123a" is 75% numeric
-        assert not is_probable_stray_number_fragment("123a", threshold=0.9)
+        assert not is_probable_stray_number_fragment("112233aa", threshold=0.9)
         assert is_probable_stray_number_fragment("123a", threshold=0.7)
 
     def test_custom_min_length(self):
