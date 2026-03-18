@@ -20,6 +20,33 @@ The current version of this repository is a **Work in Progress.**
 We suppose there is a basic dev environment with compilers, etc.
 
 
+## Configuration ##
+
+Create a `config.yaml` file to customize pipeline settings:
+
+```yaml
+# Paths to trained models (from setup_pipeline)
+model_paths:
+  ngram: ./DATA/pretrain/models
+  nupunkt: ./DATA/pretrain/models
+  embedding: ./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim
+  mmem_classifier: ./DATA/pretrain/models/mmem_classifier
+  em_subclassifier: ./DATA/pretrain/models/em_subclassifier
+
+# Chunking algorithm: "texttiling" or "c99"
+chunking:
+  algorithm: texttiling
+
+# Perplexity computation (GPU recommended)
+perplexity:
+  enabled: false
+  model_name: Qwen/Qwen3-0.6B-Base
+
+# Compress output shard files with gzip
+use_gzip: false
+```
+
+
 ## About IDI ##
 
 The Institutional Data Initiative at Harvard Law School Library works with

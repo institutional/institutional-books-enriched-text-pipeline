@@ -1,5 +1,6 @@
 
 DATA/
+config.yaml
 
 # Tasklist management
 ## https://github.com/davidlowryduda/tld

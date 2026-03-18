@@ -34,13 +34,6 @@ class ChunkingConfig:
 
 
 @dataclass
-class PerplexityFilterConfig:
-    """Perplexity filtering configuration."""
-
-    enabled: bool = False
-
-
-@dataclass
 class PerplexityConfig:
     """Perplexity computation configuration."""
 
@@ -52,7 +45,6 @@ class PerplexityConfig:
 class PipelineConfig:
     model_paths: ModelPaths = field(default_factory=ModelPaths)
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
-    perplexity_filter: PerplexityFilterConfig = field(default_factory=PerplexityFilterConfig)
     perplexity: PerplexityConfig = field(default_factory=PerplexityConfig)
     use_gzip: bool = False  # Compress shard files with gzip
 
@@ -81,9 +73,6 @@ class PipelineConfig:
         chunking = ChunkingConfig(
             algorithm=ChunkingAlgorithm(data.get("chunking", {}).get("algorithm", "texttiling")),
         )
-        perplexity_filter = PerplexityFilterConfig(
-            enabled=data.get("perplexity_filter", {}).get("enabled", False),
-        )
         perplexity = PerplexityConfig(
             enabled=data.get("perplexity", {}).get("enabled", False),
             model_name=data.get("perplexity", {}).get("model_name", "Qwen/Qwen3-0.6B-Base"),
@@ -91,7 +80,6 @@ class PipelineConfig:
         return cls(
             model_paths=model_paths,
             chunking=chunking,
-            perplexity_filter=perplexity_filter,
             perplexity=perplexity,
             use_gzip=data.get("use_gzip", False),
         )
