@@ -16,6 +16,7 @@ from typing import Any, Iterator
 import click
 import torch
 from loguru import logger
+from tqdm import tqdm
 
 from const.languages import is_nupunkt_language
 from const.types import BookJSON, BooksByLangDict, NormPage, NormText, RawPage
@@ -31,10 +32,8 @@ def stream_books_from_shards(shard_dir: Path) -> Iterator[BookJSON]:
     Handles both .jsonl and .jsonl.gz files.
     """
     # Find all shard files (both compressed and uncompressed)
-    shard_paths = sorted(
-        set(shard_dir.glob("*.jsonl")) | set(shard_dir.glob("*.jsonl.gz"))
-    )
-    for shard_path in shard_paths:
+    shard_paths = sorted(set(shard_dir.glob("*.jsonl")) | set(shard_dir.glob("*.jsonl.gz")))
+    for shard_path in tqdm(shard_paths):
         yield from iter_jsonl(shard_path)
 
 
