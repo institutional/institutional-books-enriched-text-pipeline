@@ -1,4 +1,4 @@
-"""Tests for commands/step11_compute_perplexity.py CLI."""
+"""Tests for commands/compute_perplexities.py CLI."""
 
 import json
 from pathlib import Path
@@ -6,37 +6,14 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from commands.step11_compute_perplexity import main as step11_main
+from commands.compute_perplexities import main as compute_perplexities_main
 
 
-class TestStep11CLI:
-    def test_exits_successfully_when_disabled(self, tmp_path: Path):
-        """Test CLI exits with success when perplexity is disabled (default)."""
-        input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.jsonl"
-
-        book = {
-            "barcode_src": "book1",
-            "middlematter_sentences": ["Test."],
-            "subtopic_paragraph_start_indices": [0],
-        }
-        input_file.write_text(json.dumps(book))
-
-        runner = CliRunner()
-        result = runner.invoke(
-            step11_main, ["--input-file", str(input_file), "--output-file", str(output_file)]
-        )
-
-        assert result.exit_code == 0
-        # Log output goes to stderr, not stdout
-        assert not output_file.exists()
-
-    @patch("commands.step11_compute_perplexity.load_perplexity_model")
-    @patch("commands.step11_compute_perplexity.compute_perplexities_in_book")
-    def test_processes_books_when_enabled(
-        self, mock_compute, mock_load_model, tmp_path: Path
-    ):
-        """Test CLI processes books when perplexity is enabled."""
+class TestComputePerplexitiesCLI:
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    def test_processes_books(self, mock_compute, mock_load_model, tmp_path: Path):
+        """Test CLI processes books and outputs perplexity records."""
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
@@ -46,8 +23,7 @@ class TestStep11CLI:
         }
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.jsonl"
-        config_file = tmp_path / "config.yaml"
+        output_file = tmp_path / "output.perplexity.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -55,32 +31,29 @@ class TestStep11CLI:
             "subtopic_paragraph_start_indices": [0, 1],
         }
         input_file.write_text(json.dumps(book))
-        config_file.write_text("perplexity:\n  enabled: true\n")
 
         runner = CliRunner()
         result = runner.invoke(
-            step11_main,
-            [
-                "--input-file", str(input_file),
-                "--output-file", str(output_file),
-                "--config-file", str(config_file),
-            ],
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
         assert output_file.exists()
 
-        output_records = [json.loads(line) for line in output_file.read_text().strip().split("\n")]
+        output_records = [
+            json.loads(line) for line in output_file.read_text().strip().split("\n")
+        ]
         assert len(output_records) == 1
         assert output_records[0]["book_id"] == "book1"
         assert output_records[0]["perplexities"] == [10.5, 20.3]
 
-    @patch("commands.step11_compute_perplexity.load_perplexity_model")
-    @patch("commands.step11_compute_perplexity.compute_perplexities_in_book")
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
     def test_output_format_matches_expected_structure(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
-        """Test output JSONL format matches expected structure."""
+        """Test output JSONL format has {book_id, perplexities} structure."""
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
@@ -90,8 +63,7 @@ class TestStep11CLI:
         ]
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.jsonl"
-        config_file = tmp_path / "config.yaml"
+        output_file = tmp_path / "output.perplexity.jsonl"
 
         books = [
             {
@@ -106,28 +78,28 @@ class TestStep11CLI:
             },
         ]
         input_file.write_text("\n".join(json.dumps(b) for b in books))
-        config_file.write_text("perplexity:\n  enabled: true\n")
 
         runner = CliRunner()
         result = runner.invoke(
-            step11_main,
-            [
-                "--input-file", str(input_file),
-                "--output-file", str(output_file),
-                "--config-file", str(config_file),
-            ],
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
 
-        output_records = [json.loads(line) for line in output_file.read_text().strip().split("\n")]
+        output_records = [
+            json.loads(line) for line in output_file.read_text().strip().split("\n")
+        ]
         assert len(output_records) == 2
 
-        # Check structure
+        # Check structure - should be {book_id, perplexities} records
         for record in output_records:
             assert "book_id" in record
             assert "perplexities" in record
             assert isinstance(record["perplexities"], list)
+            # Should NOT contain full book fields
+            assert "barcode_src" not in record
+            assert "middlematter_sentences" not in record
 
         assert output_records[0]["book_id"] == "book1"
         assert output_records[0]["perplexities"] == [12.5, 45.2, 8.7]
@@ -137,17 +109,18 @@ class TestStep11CLI:
     def test_fails_on_missing_input_file(self, tmp_path: Path):
         """Test that CLI fails when input file doesn't exist."""
         input_file = tmp_path / "nonexistent.jsonl"
-        output_file = tmp_path / "output.jsonl"
+        output_file = tmp_path / "output.perplexity.jsonl"
 
         runner = CliRunner()
         result = runner.invoke(
-            step11_main, ["--input-file", str(input_file), "--output-file", str(output_file)]
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code != 0
 
-    @patch("commands.step11_compute_perplexity.load_perplexity_model")
-    @patch("commands.step11_compute_perplexity.compute_perplexities_in_book")
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
     def test_skips_books_with_errors(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -161,8 +134,7 @@ class TestStep11CLI:
         ]
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.jsonl"
-        config_file = tmp_path / "config.yaml"
+        output_file = tmp_path / "output.perplexity.jsonl"
 
         books = [
             {"barcode_src": "book1"},  # Missing required fields
@@ -173,26 +145,25 @@ class TestStep11CLI:
             },
         ]
         input_file.write_text("\n".join(json.dumps(b) for b in books))
-        config_file.write_text("perplexity:\n  enabled: true\n")
 
         runner = CliRunner()
         result = runner.invoke(
-            step11_main,
-            [
-                "--input-file", str(input_file),
-                "--output-file", str(output_file),
-                "--config-file", str(config_file),
-            ],
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
 
-        output_records = [json.loads(line) for line in output_file.read_text().strip().split("\n")]
+        # Only successful book should be in output
+        output_records = [
+            json.loads(line) for line in output_file.read_text().strip().split("\n")
+        ]
         assert len(output_records) == 1
         assert output_records[0]["book_id"] == "book2"
+        assert output_records[0]["perplexities"] == [5.0]
 
-    @patch("commands.step11_compute_perplexity.load_perplexity_model")
-    @patch("commands.step11_compute_perplexity.compute_perplexities_in_book")
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
     def test_creates_output_directory(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -203,8 +174,7 @@ class TestStep11CLI:
         mock_compute.return_value = {"book_id": "book1", "perplexities": [1.0]}
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "nested" / "dir" / "output.jsonl"
-        config_file = tmp_path / "config.yaml"
+        output_file = tmp_path / "nested" / "dir" / "output.perplexity.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -212,22 +182,17 @@ class TestStep11CLI:
             "subtopic_paragraph_start_indices": [0],
         }
         input_file.write_text(json.dumps(book))
-        config_file.write_text("perplexity:\n  enabled: true\n")
 
         runner = CliRunner()
         result = runner.invoke(
-            step11_main,
-            [
-                "--input-file", str(input_file),
-                "--output-file", str(output_file),
-                "--config-file", str(config_file),
-            ],
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
         assert output_file.exists()
 
-    @patch("commands.step11_compute_perplexity.load_perplexity_model")
+    @patch("commands.compute_perplexities.load_perplexity_model")
     def test_uses_custom_model_from_config(self, mock_load_model, tmp_path: Path):
         """Test that custom model name from config is used."""
         mock_model = MagicMock()
@@ -235,7 +200,7 @@ class TestStep11CLI:
         mock_load_model.return_value = (mock_model, mock_tokenizer)
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.jsonl"
+        output_file = tmp_path / "output.perplexity.jsonl"
         config_file = tmp_path / "config.yaml"
 
         book = {
@@ -244,20 +209,23 @@ class TestStep11CLI:
             "subtopic_paragraph_start_indices": [0],
         }
         input_file.write_text(json.dumps(book))
-        config_file.write_text(
-            "perplexity:\n  enabled: true\n  model_name: custom/model-name\n"
-        )
+        config_file.write_text("perplexity:\n  model_name: custom/model-name\n")
 
-        with patch("commands.step11_compute_perplexity.compute_perplexities_in_book") as mock_compute:
+        with patch(
+            "commands.compute_perplexities.compute_perplexities_in_book"
+        ) as mock_compute:
             mock_compute.return_value = {"book_id": "book1", "perplexities": [1.0]}
 
             runner = CliRunner()
             runner.invoke(
-                step11_main,
+                compute_perplexities_main,
                 [
-                    "--input-file", str(input_file),
-                    "--output-file", str(output_file),
-                    "--config-file", str(config_file),
+                    "--input-file",
+                    str(input_file),
+                    "--output-file",
+                    str(output_file),
+                    "--config-file",
+                    str(config_file),
                 ],
             )
 

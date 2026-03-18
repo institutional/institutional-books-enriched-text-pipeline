@@ -1,7 +1,7 @@
 """
 process_shard.py - main shard processing orchestrator
 
-Handles steps 1-11.
+Handles steps 1-10.
 """
 
 import importlib
@@ -216,7 +216,7 @@ def main(
     end_step: str | None,
 ):
     """
-    Process a shard through the main pipeline (steps 1-11).
+    Process a shard through the main pipeline (steps 1-10).
 
     Reads books from input shard, processes each through the configured
     steps, and writes results to complete/incomplete output files.

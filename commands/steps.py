@@ -19,35 +19,32 @@ MAIN_STEPS = [
     "step10_chunk",
 ]
 
-PERPLEXITY_STEPS = [
-    "step11_compute_perplexity",
-]
+# Perplexity computation is handled by a separate CLI (GPU-intensive):
+#   compute_perplexities.py - compute per-paragraph perplexity → *.perplexity.jsonl
 
-# Deduplication is handled by separate CLIs, not process_shard.py:
-#   1. dedup_compute_simhashes.py - compute simhashes per shard (parallel)
-#   2. dedup_find_duplicates.py - find duplicates across all shards (single)
-#   3. dedup_annotate.py - annotate books with duplicate info (parallel)
-DEDUP_STEPS = []
+# Deduplication is handled by separate CLIs:
+#   dedup_compute_simhashes.py - compute simhashes per shard (parallel)
+#   dedup_find_duplicates.py - find duplicates across all shards (single)
+#   dedup_annotate.py - annotate books with duplicate info (parallel)
 
+# Post processing is handled separately:
 POST_STEPS = [
     "step13_annotate",
-    #    "step14_add_metadata",
-    #    "step15_clean",
+    "step14_add_metadata",
+    "step15_clean",
 ]
-
-STEP_ORDER = MAIN_STEPS + PERPLEXITY_STEPS + DEDUP_STEPS + POST_STEPS
 
 
 def validate_step_name(step_name: str) -> bool:
-    return step_name in STEP_ORDER
+    return step_name in MAIN_STEPS
 
 
 def get_step_index(step_name: str) -> int:
-    """Get the index of a step in STEP_ORDER."""
+    """Get the index of a step in MAIN_STEPS."""
     try:
-        return STEP_ORDER.index(step_name)
+        return MAIN_STEPS.index(step_name)
     except ValueError:
-        raise ValueError(f"Unknown step: {step_name}. Valid steps: {STEP_ORDER}")
+        raise ValueError(f"Unknown step: {step_name}. Valid steps: {MAIN_STEPS}")
 
 
 def get_step_range(

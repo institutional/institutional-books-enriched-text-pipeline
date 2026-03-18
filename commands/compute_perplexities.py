@@ -1,11 +1,10 @@
 """
-step11_compute_perplexity.py - Compute perplexity for paragraph chunks.
+compute_perplexities.py - Compute per-paragraph perplexity scores.
 
-This is an optional step that computes perplexity scores for each paragraph
-using a causal language model (default: Qwen3-0.6B-Base).
+Computes perplexity for each paragraph using a causal language model.
+Outputs to .perplexity.jsonl files for use by postprocess_shard.py.
 
-Similar to dedup_compute_simhashes.py, this outputs to parallel .perplexity.jsonl files.
-The step is disabled by default via config.
+This is designed to run on GPU nodes separately from the main pipeline.
 """
 
 import json
@@ -20,6 +19,16 @@ from library.perplexity.compute_perplexity import (
     compute_perplexities_in_book,
     load_perplexity_model,
 )
+from utils.jsonl_io import open_jsonl
+
+
+def get_device() -> str:
+    """Determine the best available device."""
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 @click.command()
@@ -27,13 +36,13 @@ from library.perplexity.compute_perplexity import (
     "--input-file",
     type=click.Path(exists=True, path_type=Path),
     required=True,
-    help="Input JSONL file with chunked books",
+    help="Input JSONL file with chunked books (after step 10)",
 )
 @click.option(
     "--output-file",
     type=click.Path(path_type=Path),
     required=True,
-    help="Output JSONL file for perplexity records",
+    help="Output .perplexity.jsonl file",
 )
 @click.option(
     "--config-file",
@@ -48,39 +57,27 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
     Reads books with chunked paragraphs and outputs perplexity records:
         {"book_id": "barcode123", "perplexities": [12.5, 45.2, 8.7, ...]}
 
-    The nth perplexity corresponds to the nth paragraph (from subtopic_paragraph_start_indices).
-
-    This step is disabled by default. Enable in config with:
-        perplexity:
-          enabled: true
+    The nth perplexity corresponds to the nth paragraph
+    (from subtopic_paragraph_start_indices).
 
     Example:
-        python -m commands.step11_compute_perplexity \\
+        python -m commands.compute_perplexities \\
             --input-file DATA/shards/processed/shard0001.complete.jsonl \\
-            --output-file DATA/perplexity/shard0001.perplexity.jsonl \\
-            --config-file config.yaml
+            --output-file DATA/perplexity/shard0001.perplexity.jsonl
     """
     config = load_config(config_file) if config_file else PipelineConfig()
 
-    if not config.perplexity.enabled:
-        logger.info("Perplexity computation disabled in config. Skipping.")
-        return
-
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
-    else:
-        device = "cpu"
+    device = get_device()
+    logger.info(f"Loading perplexity model on {device}...")
     model, tokenizer = load_perplexity_model(config.perplexity.model_name, device)
 
     books_processed = 0
     books_skipped = 0
     total_paragraphs = 0
 
-    with open(input_file) as f_in, open(output_file, "w") as f_out:
+    with open_jsonl(input_file, "r") as f_in, open(output_file, "w") as f_out:
         for line in f_in:
             book = json.loads(line)
             book_id = book.get("barcode_src", "")
@@ -100,7 +97,7 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
 
     logger.info(
         f"Processed {books_processed} books, skipped {books_skipped}, "
-        f"computed {total_paragraphs} perplexities to {output_file}"
+        + f"computed {total_paragraphs} perplexities to {output_file}"
     )
 
 

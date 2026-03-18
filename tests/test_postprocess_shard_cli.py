@@ -61,14 +61,17 @@ class TestPostprocessShardCLI:
         assert len(output_books) == 1
 
         book = output_books[0]
-        # Should have annotated fields (step13 only runs by default now)
+        # Should have annotated fields from step13
         assert "annotated_frontmatter" in book
         assert "annotated_middlematter" in book
         assert "annotated_backmatter" in book
-        # Should still have original fields (step15 not run)
+        # Should have metadata from step14
+        assert "metadata" in book
+        # step15 (clean) removes intermediate fields but keeps essential ones
         assert "barcode_src" in book
         assert "language_gen" in book
-        assert "frontmatter" in book  # Not cleaned since step15 not run
+        # frontmatter is removed by step15 clean
+        assert "frontmatter" not in book
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     def test_uses_perplexity_file(self, mock_load_classifier, tmp_path: Path):
