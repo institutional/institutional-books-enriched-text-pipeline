@@ -22,7 +22,7 @@ from const.types import (
     ProcessStats,
     StepFunction,
 )
-from utils.atomic_write import atomic_write_jsonl
+from utils.atomic_write import atomic_jsonl_writer
 from utils.jsonl_io import open_jsonl
 
 
@@ -98,7 +98,6 @@ def process_shard(
         shard_id: Shard identifier
         segmenter: Segmenter type ('nupunkt' or 'sat')
         config: Pipeline configuration
-        logger: Logger instance
         start_step: First step to run (default: first in MAIN_STEPS)
         end_step: Last step to run (default: last in MAIN_STEPS)
 
@@ -109,10 +108,19 @@ def process_shard(
     steps = get_step_range(start_step, end_step, MAIN_STEPS)
     logger.info(f"Running steps: {steps[0]} -> {steps[-1]} on shard {shard_id}.")
 
-    complete_books: list[BookJSON] = []
-    incomplete_books: list[BookJSON] = []
+    # Set up output paths
+    if config.use_gzip:
+        complete_path = output_dir / f"shard{shard_id}.complete.jsonl.gz"
+    else:
+        complete_path = output_dir / f"shard{shard_id}.complete.jsonl"
+    incomplete_path = output_dir / f"shard{shard_id}.incomplete.jsonl"
 
-    with open_jsonl(input_file, "r") as f:
+    # Stream writes - only one book in memory at a time
+    with (
+        atomic_jsonl_writer(complete_path) as complete_writer,
+        atomic_jsonl_writer(incomplete_path, compress=False) as incomplete_writer,
+        open_jsonl(input_file, "r") as f,
+    ):
         for line_num, line in enumerate(f, 1):
             try:
                 book = json.loads(line)
@@ -131,25 +139,18 @@ def process_shard(
                 result_book["_processing_complete"] = True
                 result_book["_last_completed_step"] = last_step
                 result_book["_processed_at"] = datetime.now(UTC).isoformat()
-                complete_books.append(result_book)
+                complete_writer.write_record(result_book)
                 logger.info(f"Book {book_id} completed successfully")
             else:
                 result_book["_processing_complete"] = False
                 result_book["_last_completed_step"] = last_step
                 result_book["_error_message"] = error_msg
                 result_book["_processed_at"] = datetime.now(UTC).isoformat()
-                incomplete_books.append(result_book)
+                incomplete_writer.write_record(result_book)
                 logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
 
-    # Write outputs atomically (incomplete always uncompressed for inspection)
-    if config.use_gzip:
-        complete_path = output_dir / f"shard{shard_id}.complete.jsonl.gz"
-    else:
-        complete_path = output_dir / f"shard{shard_id}.complete.jsonl"
-    incomplete_path = output_dir / f"shard{shard_id}.incomplete.jsonl"
-    complete_count = atomic_write_jsonl(iter(complete_books), complete_path)
-    incomplete_count = atomic_write_jsonl(iter(incomplete_books), incomplete_path)
-
+    complete_count = complete_writer.count
+    incomplete_count = incomplete_writer.count
     logger.info(f"Complete books: {complete_count}, Incomplete: {incomplete_count}")
 
     return {

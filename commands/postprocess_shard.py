@@ -18,7 +18,7 @@ from library.annotate.endmatter import load_em_subclassifier
 from library.annotate.middlematter import annotate_middlematter
 from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
-from utils.atomic_write import atomic_write_jsonl
+from utils.atomic_write import atomic_jsonl_writer
 from utils.jsonl_io import load_perplexity_map, open_jsonl
 
 # Fields to keep in final output (step15)
@@ -144,6 +144,8 @@ def postprocess_shard(
     """
     Post-process all books in a shard through steps 13-15.
 
+    Streams output to avoid holding all books in memory.
+
     Args:
         input_file: Input JSONL file (after deduplication)
         output_file: Output JSONL file
@@ -172,10 +174,14 @@ def postprocess_shard(
     if perp_map:
         logger.info(f"Loaded perplexities for {len(perp_map)} books")
 
-    complete_books: list[BookJSON] = []
-    incomplete_books: list[BookJSON] = []
+    incomplete_path = output_file.with_suffix(".incomplete.jsonl")
 
-    with open_jsonl(input_file, "r") as f:
+    # Stream writes - only one book in memory at a time
+    with (
+        atomic_jsonl_writer(output_file) as complete_writer,
+        atomic_jsonl_writer(incomplete_path, compress=False) as incomplete_writer,
+        open_jsonl(input_file, "r") as f,
+    ):
         for line_num, line in enumerate(f, 1):
             try:
                 book = json.loads(line)
@@ -193,23 +199,19 @@ def postprocess_shard(
             if error_msg is None:
                 result_book["_postprocessing_complete"] = True
                 result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
-                complete_books.append(result_book)
+                complete_writer.write_record(result_book)
             else:
                 result_book["_postprocessing_complete"] = False
                 result_book["_postprocessing_error"] = error_msg
                 result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
-                incomplete_books.append(result_book)
+                incomplete_writer.write_record(result_book)
                 logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
 
-    # Write outputs
-    complete_count = atomic_write_jsonl(iter(complete_books), output_file)
+    complete_count = complete_writer.count
+    incomplete_count = incomplete_writer.count
 
-    if incomplete_books:
-        incomplete_path = output_file.with_suffix(".incomplete.jsonl")
-        incomplete_count = atomic_write_jsonl(iter(incomplete_books), incomplete_path)
+    if incomplete_count > 0:
         logger.warning(f"Wrote {incomplete_count} failures to {incomplete_path}")
-    else:
-        incomplete_count = 0
 
     logger.info(f"Complete: {complete_count}, Incomplete: {incomplete_count}")
 
