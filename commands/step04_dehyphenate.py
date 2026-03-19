@@ -11,8 +11,16 @@ import click
 from const.config import PipelineConfig, load_config
 from library.denoise.dehyphenate import NGramScorer, dehyphenate_book
 
-# Module-level scorer cache
+# Single-language scorer cache (evicts on language change to limit memory)
 _scorer_cache: dict[str, NGramScorer] = {}
+
+
+def _get_single_lang_cache(lang: str) -> dict[str, NGramScorer]:
+    """Return cache, evicting if language changed."""
+    global _scorer_cache
+    if _scorer_cache and lang not in _scorer_cache:
+        _scorer_cache.clear()
+    return _scorer_cache
 
 
 def process_book(
@@ -31,7 +39,9 @@ def process_book(
     Returns:
         Processed book dictionary with dehyphenated middlematter
     """
-    return dehyphenate_book(book, config=config, lm_cache=_scorer_cache)
+    lang = book.get("language_gen", "")
+    cache = _get_single_lang_cache(lang)
+    return dehyphenate_book(book, config=config, lm_cache=cache)
 
 
 @click.command()
