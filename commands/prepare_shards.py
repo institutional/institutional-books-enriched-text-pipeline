@@ -5,14 +5,17 @@ Download books from institutional/institutional-books-1.0 dataset and partitions
 them into shards depending on primary language. There are two sets of shards:
 Nupunkt shards (roughly having punctuation similar to English) and SaT shards
 (different).
+
+Supports interruption and resumption via a progress file.
 """
 
 import csv
+import json
 from pathlib import Path
-from typing import Iterator
+from typing import Any, TypedDict
 
 import click
-from datasets import load_dataset
+from datasets import IterableDataset, load_dataset
 from loguru import logger
 from tqdm import tqdm
 
@@ -21,15 +24,44 @@ from const.types import BookJSON, ManifestStats, ShardStats
 from utils.atomic_write import atomic_write_jsonl
 
 
-def stream_books_from_hf(
-    dataset_name: str = "institutional/institutional-books-1.0", split: str = "train"
-) -> Iterator[BookJSON]:
-    """
-    Stream book records
-    """
-    dataset = load_dataset(dataset_name, split=split, streaming=True)
-    for record in dataset:  # type: ignore
-        yield dict(record)  # type: ignore
+class ProgressState(TypedDict):
+    """State saved for resumption."""
+
+    hf_state_dict: dict[str, Any]
+    books_processed: int
+    next_shard_id: int
+    nupunkt_books: int
+    sat_books: int
+    nupunkt_queue: list[BookJSON]
+    sat_queue: list[BookJSON]
+    manifest_entries: list[ManifestStats]
+
+
+def load_progress(progress_path: Path) -> ProgressState | None:
+    """Load progress state from file if it exists."""
+    if not progress_path.exists():
+        return None
+    try:
+        with open(progress_path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load progress file: {e}")
+        return None
+
+
+def save_progress(progress_path: Path, state: ProgressState) -> None:
+    """Save progress state to file atomically."""
+    tmp_path = progress_path.with_suffix(".tmp")
+    with open(tmp_path, "w") as f:
+        json.dump(state, f)
+    tmp_path.rename(progress_path)
+
+
+def delete_progress(progress_path: Path) -> None:
+    """Delete progress file on successful completion."""
+    if progress_path.exists():
+        progress_path.unlink()
+        logger.info(f"Deleted progress file: {progress_path}")
 
 
 def determine_segmenter(book: BookJSON) -> str:
@@ -59,29 +91,54 @@ def prepare_shards(
 
     Instead of using HF shards, this streams into two types of shards based on later sentence
     segmentation preference.
+
+    Supports interruption and resumption via a progress file.
     """
-    # TODO: add basic validation on max_books and shard_size
     logger.info(f"Preparing shards for HF:{dataset_name}:{split} to {output_dir}.")
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    nupunkt_queue: list[BookJSON] = []
-    sat_queue: list[BookJSON] = []
-    manifest_entries: list[ManifestStats] = []
+    progress_path = output_dir / "progress.json"
 
-    next_shard_id: int = 1
+    # Load or initialize state
+    progress = load_progress(progress_path)
+    if progress:
+        logger.info(f"Resuming from progress file: {progress['books_processed']} books processed")
+        nupunkt_queue = progress["nupunkt_queue"]
+        sat_queue = progress["sat_queue"]
+        manifest_entries = progress["manifest_entries"]
+        next_shard_id = progress["next_shard_id"]
+        total_books = progress["books_processed"]
+        nupunkt_books = progress["nupunkt_books"]
+        sat_books = progress["sat_books"]
+        hf_state_dict = progress["hf_state_dict"]
+    else:
+        nupunkt_queue = []
+        sat_queue = []
+        manifest_entries = []
+        next_shard_id = 1
+        total_books = 0
+        nupunkt_books = 0
+        sat_books = 0
+        hf_state_dict = None
 
-    def flush_queue(queue: list[BookJSON], segmenter: str) -> int:
-        """Flush queue to shard file and return new shard id"""
+    # Load dataset
+    dataset: IterableDataset = load_dataset(dataset_name, split=split, streaming=True)
+    if hf_state_dict:
+        dataset.load_state_dict(hf_state_dict)
+
+    def flush_queue(queue: list[BookJSON], segmenter: str) -> None:
+        """Flush queue to shard file."""
         nonlocal next_shard_id
         if not queue:
-            return next_shard_id
+            return
 
         shard_id = next_shard_id
         next_shard_id += 1
 
         filename = make_shard_filename(shard_id, segmenter, use_gzip)
         shard_path = raw_dir / filename
+        logger.info(f"Writing shard to {shard_path}...")
         count = atomic_write_jsonl(iter(queue), shard_path)
         manifest_entries.append(
             {
@@ -92,31 +149,43 @@ def prepare_shards(
             }
         )
         queue.clear()
-        logger.info(f"Writing shard to {shard_path}...")
-        return next_shard_id
 
-    total_books = 0
-    nupunkt_books = 0
-    sat_books = 0
+    def save_current_progress() -> None:
+        """Save current state to progress file."""
+        state: ProgressState = {
+            "hf_state_dict": dataset.state_dict(),
+            "books_processed": total_books,
+            "next_shard_id": next_shard_id,
+            "nupunkt_books": nupunkt_books,
+            "sat_books": sat_books,
+            "nupunkt_queue": nupunkt_queue,
+            "sat_queue": sat_queue,
+            "manifest_entries": manifest_entries,
+        }
+        save_progress(progress_path, state)
 
     logger.debug("Starting to stream books...")
     IB1_SIZE = 983004
     total = IB1_SIZE
     if max_books and max_books < IB1_SIZE:
         total = max_books
-    with tqdm(total=total) as pbar:
-        for book in stream_books_from_hf(dataset_name, split):
+
+    with tqdm(total=total, initial=total_books) as pbar:
+        for book in dataset:
+            book = dict(book)
             segmenter = determine_segmenter(book)
             if segmenter == "nupunkt":
                 nupunkt_queue.append(book)
                 nupunkt_books += 1
                 if len(nupunkt_queue) >= shard_size:
                     flush_queue(nupunkt_queue, "nupunkt")
+                    save_current_progress()
             else:
                 sat_queue.append(book)
                 sat_books += 1
                 if len(sat_queue) >= shard_size:
                     flush_queue(sat_queue, "sat")
+                    save_current_progress()
 
             total_books += 1
             pbar.update(1)
@@ -134,6 +203,9 @@ def prepare_shards(
         writer = csv.DictWriter(f, fieldnames=["shard_id", "filename", "segmenter", "book_count"])
         writer.writeheader()
         writer.writerows(manifest_entries)
+
+    # Clean up progress file on successful completion
+    delete_progress(progress_path)
 
     stats: ShardStats = {
         "total_books": total_books,
