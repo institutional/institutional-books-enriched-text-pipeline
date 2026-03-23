@@ -108,7 +108,7 @@ class TestStep13CLI:
 
         output_book = json.loads(output_file.read_text().strip())
         assert "<idi-section>" in output_book["annotated_middlematter"]
-        assert "<idi-paragraph>" in output_book["annotated_middlematter"]
+        assert "<idi-paragraph" in output_book["annotated_middlematter"]
 
     @patch("commands.step13_annotate.load_em_subclassifier")
     def test_uses_perplexity_file(self, mock_load_classifier, tmp_path: Path):

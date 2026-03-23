@@ -27,19 +27,31 @@ def build_endmatter_tag(content: str, endmatter_type: str) -> str:
     return f'<idi-endmatter type="{endmatter_type}">{escape_xml(content)}</idi-endmatter>'
 
 
-def build_paragraph_tag(text: str, perplexity: float | None = None) -> str:
+def build_paragraph_tag(
+    text: str,
+    perplexity: float | None = None,
+    language: str | None = None,
+) -> str:
     """
     Build a paragraph tag.
 
     Args:
         text: The paragraph text content.
         perplexity: Optional perplexity score for the paragraph.
+        language: Optional language code for the paragraph.
 
     Returns:
-        Tagged string like: <idi-paragraph perplexity="8.7">text</idi-paragraph>
+        Tagged string like: <idi-paragraph perplexity="8.7" language="en">text</idi-paragraph>
     """
+    attrs = []
     if perplexity is not None:
-        return f'<idi-paragraph perplexity="{perplexity:.1f}">{escape_xml(text)}</idi-paragraph>'
+        attrs.append(f'perplexity="{perplexity:.1f}"')
+    if language is not None:
+        attrs.append(f'language="{language}"')
+
+    if attrs:
+        attr_str = " " + " ".join(attrs)
+        return f"<idi-paragraph{attr_str}>{escape_xml(text)}</idi-paragraph>"
     return f"<idi-paragraph>{escape_xml(text)}</idi-paragraph>"
 
 

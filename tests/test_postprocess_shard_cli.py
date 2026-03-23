@@ -189,7 +189,7 @@ class TestPostprocessShardCLI:
         assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"]
         # Check middlematter has section/paragraph tags
         assert "<idi-section>" in output_book["annotated_middlematter"]
-        assert "<idi-paragraph>" in output_book["annotated_middlematter"]
+        assert "<idi-paragraph" in output_book["annotated_middlematter"]
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     @patch("commands.postprocess_shard.compute_text_stats")

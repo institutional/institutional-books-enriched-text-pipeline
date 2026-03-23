@@ -1,6 +1,11 @@
 """Tests for library/annotate modules."""
 
 
+from library.annotate.language import (
+    UNKNOWN,
+    detect_language,
+    detect_paragraph_languages,
+)
 from library.annotate.middlematter import (
     annotate_middlematter,
     get_paragraph_text,
@@ -165,7 +170,8 @@ class TestAnnotateMiddlematter:
         }
         result = annotate_middlematter(book)
         assert "<idi-section>" in result
-        assert "<idi-paragraph>Hello world.</idi-paragraph>" in result
+        assert "<idi-paragraph" in result
+        assert "Hello world.</idi-paragraph>" in result
 
     def test_with_perplexity(self):
         book = {
@@ -233,3 +239,96 @@ class TestAnnotateMiddlematter:
         result = annotate_middlematter(book)
         # Should have two sections
         assert result.count("<idi-section>") == 2
+
+
+class TestDetectLanguage:
+    def test_detects_english(self):
+        text = "This is a long English sentence with many words for reliable detection."
+        result = detect_language(text)
+        assert result == "eng"
+
+    def test_detects_german(self):
+        text = "Das ist ein langer deutscher Satz mit vielen Wörtern."
+        result = detect_language(text)
+        assert result == "deu"
+
+    def test_returns_unknown_for_short_text(self):
+        result = detect_language("123")
+        assert result == UNKNOWN
+
+    def test_returns_unknown_for_empty_text(self):
+        result = detect_language("")
+        assert result == UNKNOWN
+
+
+class TestDetectParagraphLanguages:
+    def test_detects_multiple_languages(self):
+        paragraphs = [
+            "This is a long English paragraph with enough words.",
+            "Das ist ein langer deutscher Absatz mit vielen Wörtern.",
+        ]
+        langs = detect_paragraph_languages(paragraphs)
+        assert langs == ["eng", "deu"]
+
+    def test_propagates_to_short_unknown(self):
+        paragraphs = [
+            "This is a long English paragraph with enough words.",
+            "42",  # Short, should inherit 'eng'
+            "Another long English paragraph with enough words.",
+        ]
+        langs = detect_paragraph_languages(paragraphs)
+        assert langs[0] == "eng"
+        assert langs[1] == "eng"  # Inherited
+        assert langs[2] == "eng"
+
+    def test_no_propagation_when_neighbors_differ(self):
+        paragraphs = [
+            "This is a long English paragraph with enough words.",
+            "42",
+            "Das ist ein langer deutscher Absatz mit vielen Wörtern.",
+        ]
+        langs = detect_paragraph_languages(paragraphs)
+        assert langs[0] == "eng"
+        assert langs[1] == UNKNOWN  # Not propagated
+        assert langs[2] == "deu"
+
+    def test_no_propagation_for_long_paragraph(self):
+        paragraphs = [
+            "This is a long English paragraph with enough words.",
+            "12345 " * 50,  # Long but undetectable (just numbers)
+            "Another long English paragraph with enough words.",
+        ]
+        langs = detect_paragraph_languages(paragraphs, token_threshold=30)
+        # Long paragraph should not be propagated even with same neighbors
+        assert langs[1] == UNKNOWN
+
+    def test_empty_list(self):
+        assert detect_paragraph_languages([]) == []
+
+    def test_single_paragraph(self):
+        langs = detect_paragraph_languages(["This is English text with many words."])
+        assert len(langs) == 1
+
+
+class TestBuildParagraphTagWithLanguage:
+    def test_paragraph_with_language(self):
+        result = build_paragraph_tag("Text", language="eng")
+        assert result == '<idi-paragraph language="eng">Text</idi-paragraph>'
+
+    def test_paragraph_with_perplexity_and_language(self):
+        result = build_paragraph_tag("Text", perplexity=10.5, language="deu")
+        assert result == '<idi-paragraph perplexity="10.5" language="deu">Text</idi-paragraph>'
+
+
+class TestAnnotateMiddlematterWithLanguage:
+    def test_includes_language_attribute(self):
+        book = {
+            "barcode_src": "test",
+            "middlematter_sentences": [
+                "This is a long English sentence with many words for detection."
+            ],
+            "subtopic_paragraph_start_indices": [0],
+            "subtopic_section_start_indices": [0],
+        }
+        result = annotate_middlematter(book)
+        assert 'language="eng"' in result

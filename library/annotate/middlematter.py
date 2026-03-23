@@ -9,6 +9,7 @@ Handles annotation of
 """
 
 from const.types import BookJSON
+from library.annotate.language import detect_paragraph_languages
 from library.annotate.tags import (
     build_duplicate_tag,
     build_paragraph_tag,
@@ -96,6 +97,15 @@ def annotate_middlematter(
 
     num_sections = len(section_starts)
 
+    # Extract all paragraph texts for language detection
+    num_paras = len(para_starts)
+    all_para_texts = [
+        get_paragraph_text(sentences, para_starts, i) for i in range(num_paras)
+    ]
+
+    # Detect languages with propagation
+    languages = detect_paragraph_languages(all_para_texts)
+
     # Build annotated sections
     annotated_sections = []
 
@@ -120,8 +130,11 @@ def annotate_middlematter(
 
             if str_idx in representative_paras:
                 # Representative paragraph - NOT merged with others
+                para_lang = languages[para_idx] if para_idx < len(languages) else None
                 para_tag = build_paragraph_tag(
-                    para_text, para_perp if para_perp and para_perp > 0 else None
+                    para_text,
+                    para_perp if para_perp and para_perp > 0 else None,
+                    para_lang,
                 )
                 cluster = f"{book_id}:p:{para_idx}"
                 section_content.append(build_representative_tag(para_tag, cluster))
@@ -141,7 +154,8 @@ def annotate_middlematter(
                         else None
                     )
                     d_perp_valid = d_perp if d_perp and d_perp > 0 else None
-                    dup_paras.append(build_paragraph_tag(d_text, d_perp_valid))
+                    d_lang = languages[para_idx] if para_idx < len(languages) else None
+                    dup_paras.append(build_paragraph_tag(d_text, d_perp_valid, d_lang))
 
                     # Track perplexity for section mean
                     if d_perp is not None and d_perp > 0:
@@ -163,7 +177,8 @@ def annotate_middlematter(
             else:
                 # Regular paragraph
                 para_perp_valid = para_perp if para_perp and para_perp > 0 else None
-                section_content.append(build_paragraph_tag(para_text, para_perp_valid))
+                para_lang = languages[para_idx] if para_idx < len(languages) else None
+                section_content.append(build_paragraph_tag(para_text, para_perp_valid, para_lang))
                 para_idx += 1
 
         # Compute section mean perplexity
