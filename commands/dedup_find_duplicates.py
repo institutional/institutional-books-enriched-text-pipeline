@@ -300,30 +300,52 @@ def _run_streaming_mode(
 
         from concurrent.futures import FIRST_COMPLETED, wait
 
+        # Diagnostic timing for bottleneck analysis
+        time_wait = 0.0  # Time waiting for workers
+        time_process = 0.0  # Time processing results in main process
+        time_submit = 0.0  # Time extracting hashes and submitting
+
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             pending: set = set()
             chunk_iter = iter(bucket_chunks)
 
             with tqdm(total=len(bucket_chunks), desc="Processing batches") as pbar:
                 # Initial fill: submit up to max_pending chunks
+                t_submit = time.perf_counter()
                 for chunk in itertools.islice(chunk_iter, max_pending):
                     pending.add(extract_and_submit(executor, chunk))
+                time_submit += time.perf_counter() - t_submit
 
                 # Process results and keep submitting until done
                 while pending:
                     # Wait for at least one to complete
+                    t_wait = time.perf_counter()
                     done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    time_wait += time.perf_counter() - t_wait
 
                     # Process completed futures
+                    t_process = time.perf_counter()
                     for future in done:
                         process_result(future)
                         pbar.update(1)
+                    time_process += time.perf_counter() - t_process
 
                     # Submit more work to keep the queue full
+                    t_submit = time.perf_counter()
                     for chunk in itertools.islice(chunk_iter, len(done)):
                         pending.add(extract_and_submit(executor, chunk))
+                    time_submit += time.perf_counter() - t_submit
 
         timings["4_process_buckets"] = time.perf_counter() - t0
+
+        if benchmark:
+            total_inner = time_wait + time_process + time_submit
+            logger.info("-" * 40)
+            logger.info("Phase 4 breakdown (main process):")
+            logger.info(f"  wait (workers):   {time_wait:.2f}s ({100*time_wait/total_inner:.1f}%)")
+            logger.info(f"  process results:  {time_process:.2f}s ({100*time_process/total_inner:.1f}%)")
+            logger.info(f"  extract+submit:   {time_submit:.2f}s ({100*time_submit/total_inner:.1f}%)")
+            logger.info("-" * 40)
 
         if buckets_skipped > 0:
             logger.info(f"Skipped {buckets_skipped} buckets exceeding {max_bucket_size} docs")
