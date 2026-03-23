@@ -7,8 +7,11 @@ This is phase 2 of the deduplication workflow:
 3. Annotate - parallelizable per shard
 """
 
+import array
 import json
 import os
+import subprocess
+import tempfile
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -19,10 +22,12 @@ from tqdm import tqdm
 
 from utils.atomic_write import atomic_write_json
 from utils.simhash_fast import extract_bands, hamming_distance
-from utils.unionfind import UnionFind
+from utils.unionfind import UnionFind, UnionFindInt
 
 
-def _process_buckets(buckets: list[set[str]], max_bucket_size: int) -> tuple[set[tuple[str, str]], int]:
+def _process_buckets(
+    buckets: list[set[str]], max_bucket_size: int
+) -> tuple[set[tuple[str, str]], int]:
     """Process a chunk of buckets, returning candidate pairs and skipped count."""
     candidates: set[tuple[str, str]] = set()
     skipped = 0
@@ -49,6 +54,260 @@ def _verify_pairs(
         if hamming_distance(h1, h2) <= threshold:
             duplicates.append((d1, d2))
     return duplicates
+
+
+# ============================================================================
+# Code for disk-based duplication
+# ============================================================================
+
+
+def _write_band_entries(
+    records_iter,
+    output_path: Path,
+    total: int | None = None,
+) -> None:
+    """Write band entries to a tab-separated file for external sorting.
+
+    Format: band_idx<TAB>band_value<TAB>doc_idx
+    """
+    with open(output_path, "w") as f:
+        for doc_idx, hash_val in tqdm(records_iter, total=total, desc="Writing bands"):
+            bands = extract_bands(hash_val)
+            for band_idx, band_value in enumerate(bands):
+                f.write(f"{band_idx}\t{band_value}\t{doc_idx}\n")
+
+
+def _external_sort(input_path: Path, output_path: Path, temp_dir: Path) -> None:
+    """Sort band entries file using unix sort (external merge sort)."""
+    # Sort by band_idx (numeric), then band_value (numeric)
+    # -t$'\t' sets tab as delimiter
+    # -k1,1n sorts by first field numerically
+    # -k2,2n sorts by second field numerically
+    # -T sets temp directory for large sorts
+    # -S sets buffer size (use available memory)
+    cmd = [
+        "sort",
+        "-t\t",
+        "-k1,1n",
+        "-k2,2n",
+        f"-T{temp_dir}",
+        "-S",
+        "4G",  # Use up to 4GB for sort buffer
+        "-o",
+        str(output_path),
+        str(input_path),
+    ]
+    logger.info(f"Running external sort: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Sort failed: {result.stderr}")
+
+
+def _stream_buckets(sorted_path: Path):
+    """Stream through sorted band file, yielding (band_key, [doc_indices]) groups."""
+    current_key: tuple[int, int] | None = None
+    current_docs: list[int] = []
+
+    with open(sorted_path) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            band_idx = int(parts[0])
+            band_value = int(parts[1])
+            doc_idx = int(parts[2])
+            key = (band_idx, band_value)
+
+            if key != current_key:
+                if current_key is not None and len(current_docs) >= 2:
+                    yield current_key, current_docs
+                current_key = key
+                current_docs = [doc_idx]
+            else:
+                current_docs.append(doc_idx)
+
+    # Don't forget the last bucket
+    if current_key is not None and len(current_docs) >= 2:
+        yield current_key, current_docs
+
+
+def _process_bucket_streaming(
+    doc_indices: list[int],
+    hashes: array.array,
+    threshold: int,
+    max_bucket_size: int,
+) -> list[tuple[int, int]]:
+    """Process a single bucket: generate pairs, verify, return duplicates."""
+    if len(doc_indices) > max_bucket_size:
+        return []  # Skip oversized buckets
+
+    verified = []
+    doc_indices_sorted = sorted(doc_indices)
+    for i, d1 in enumerate(doc_indices_sorted):
+        h1 = hashes[d1 * 2] | (hashes[d1 * 2 + 1] << 64)
+        for d2 in doc_indices_sorted[i + 1 :]:
+            h2 = hashes[d2 * 2] | (hashes[d2 * 2 + 1] << 64)
+            if hamming_distance(h1, h2) <= threshold:
+                verified.append((d1, d2))
+    return verified
+
+
+def _run_streaming_mode(
+    simhash_files: list[Path],
+    output_file: Path,
+    threshold: int,
+    benchmark: bool,
+    max_bucket_size: int = 10_000,
+) -> None:
+    """Run deduplication in streaming mode with external sort.
+
+    Memory usage: ~16 bytes per paragraph (for hash array) + ~8 bytes per
+    paragraph (for union-find) + sort buffer. For 1B paragraphs: ~35GB.
+    """
+    timings: dict[str, float] = {}
+
+    # Phase 1: Load records into memory-efficient structures
+    t0 = time.perf_counter()
+    logger.info(f"Loading simhash records from {len(simhash_files)} files...")
+
+    # We'll store doc_ids as strings for final output, but use integer indices internally
+    doc_id_list: list[str] = []  # index -> doc_id string
+    # Store 128-bit hashes as pairs of 64-bit values in an array
+    # Using unsigned long long ('Q') = 8 bytes each, so 16 bytes per hash
+    hashes = array.array("Q")
+
+    num_books = 0
+    for path in tqdm(simhash_files):
+        with open(path) as f:
+            for line in f:
+                data = json.loads(line)
+                book_id = data["book_id"]
+                num_books += 1
+                for i, h in enumerate(data["simhashes"]):
+                    doc_id = f"{book_id}.{i}"
+                    doc_id_list.append(doc_id)
+                    hash_int = int(h, 16) if isinstance(h, str) else h
+                    # Split 128-bit hash into two 64-bit values
+                    low = hash_int & ((1 << 64) - 1)
+                    high = hash_int >> 64
+                    hashes.append(low)
+                    hashes.append(high)
+
+    n_records = len(doc_id_list)
+    timings["1_load_records"] = time.perf_counter() - t0
+    logger.info(f"Loaded {n_records} paragraph records from {num_books} books")
+
+    if n_records == 0:
+        raise ValueError("No records found")
+
+    # Phase 2: Write band entries to temp file
+    t0 = time.perf_counter()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        bands_unsorted = temp_path / "bands_unsorted.tsv"
+        bands_sorted = temp_path / "bands_sorted.tsv"
+
+        logger.info("Writing band entries to disk...")
+
+        def record_iter():
+            for idx in range(n_records):
+                h = hashes[idx * 2] | (hashes[idx * 2 + 1] << 64)
+                yield idx, h
+
+        _write_band_entries(record_iter(), bands_unsorted, total=n_records)
+        timings["2_write_bands"] = time.perf_counter() - t0
+
+        # Phase 3: External sort
+        t0 = time.perf_counter()
+        logger.info("Sorting band entries (external sort)...")
+        _external_sort(bands_unsorted, bands_sorted, temp_path)
+        timings["3_external_sort"] = time.perf_counter() - t0
+
+        # Remove unsorted file to free disk space
+        bands_unsorted.unlink()
+
+        # Phase 4: Stream through sorted file, process buckets, build union-find
+        t0 = time.perf_counter()
+        logger.info("Processing buckets and verifying pairs...")
+        uf = UnionFindInt(n_records)
+        duplicates_found = 0
+        buckets_processed = 0
+        buckets_skipped = 0
+
+        # Count buckets first for progress bar
+        logger.info("Counting buckets...")
+        bucket_count = sum(1 for _ in _stream_buckets(bands_sorted))
+        logger.info(f"Found {bucket_count} buckets with 2+ documents")
+
+        # Process buckets
+        seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
+        for _band_key, doc_indices in tqdm(
+            _stream_buckets(bands_sorted), total=bucket_count, desc="Processing"
+        ):
+            if len(doc_indices) > max_bucket_size:
+                buckets_skipped += 1
+                continue
+
+            verified = _process_bucket_streaming(doc_indices, hashes, threshold, max_bucket_size)
+            for d1, d2 in verified:
+                pair = (d1, d2) if d1 < d2 else (d2, d1)
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    uf.union(d1, d2)
+                    duplicates_found += 1
+
+            buckets_processed += 1
+
+        timings["4_process_buckets"] = time.perf_counter() - t0
+
+        if buckets_skipped > 0:
+            logger.info(f"Skipped {buckets_skipped} buckets exceeding {max_bucket_size} docs")
+
+    # Phase 5: Build clusters
+    t0 = time.perf_counter()
+    logger.info(f"Found {duplicates_found} duplicate pairs")
+    logger.info("Building clusters...")
+
+    raw_clusters = uf.get_clusters()
+
+    # Filter to clusters with duplicates and convert to string doc_ids
+    clusters: dict[str, list[str]] = {}
+    for root, members in raw_clusters.items():
+        if len(members) > 1:
+            root_doc_id = doc_id_list[root]
+            clusters[root_doc_id] = sorted(doc_id_list[m] for m in members)
+
+    timings["5_build_clusters"] = time.perf_counter() - t0
+
+    # Phase 6: Write output
+    t0 = time.perf_counter()
+    output_data = {
+        "clusters": clusters,
+        "statistics": {
+            "total_records": n_records,
+            "duplicate_pairs": duplicates_found,
+            "clusters": len(clusters),
+        },
+    }
+    logger.debug("Writing dedup information to files...")
+    atomic_write_json(output_data, output_file)
+    timings["6_write_output"] = time.perf_counter() - t0
+
+    logger.info(f"Clusters written to {output_file}")
+    logger.info(
+        f"Statistics: {output_data['statistics']['clusters']} clusters, "
+        f"{output_data['statistics']['duplicate_pairs']} duplicate pairs"
+    )
+
+    if benchmark:
+        total = sum(timings.values())
+        logger.info("=" * 60)
+        logger.info("BENCHMARK TIMING BREAKDOWN (streaming mode)")
+        logger.info("=" * 60)
+        for phase, duration in timings.items():
+            pct = 100 * duration / total if total > 0 else 0
+            logger.info(f"  {phase}: {duration:.2f}s ({pct:.1f}%)")
+        logger.info("-" * 60)
+        logger.info(f"  TOTAL: {total:.2f}s")
+        logger.info("=" * 60)
 
 
 @click.command()
@@ -82,12 +341,29 @@ def _verify_pairs(
     default=False,
     help="Print timing breakdown for each phase",
 )
-def main(input_dir: Path, output_file: Path, threshold: int, workers: int | None, benchmark: bool):
+@click.option(
+    "--streaming",
+    is_flag=True,
+    default=False,
+    help="Use disk-based streaming mode for low memory usage (~35GB for 1B paragraphs)",
+)
+def main(
+    input_dir: Path,
+    output_file: Path,
+    threshold: int,
+    workers: int | None,
+    benchmark: bool,
+    streaming: bool,
+):
     """
     Find duplicate paragraphs across all shards using LSH.
 
     Reads all simhash files from input directory, builds an LSH index,
     finds candidate pairs, verifies them, and outputs clusters.
+
+    Two modes available:
+    - Default: In-memory LSH index (faster, ~300GB RAM for 1B paragraphs)
+    - Streaming (--streaming): Disk-based external sort (~35GB RAM for 1B paragraphs)
 
     Output format (clusters.json):
         {
@@ -99,10 +375,26 @@ def main(input_dir: Path, output_file: Path, threshold: int, workers: int | None
         python -m commands.dedup_find_duplicates \\
             --input-dir DATA/dedup/simhashes \\
             --output-file DATA/dedup/clusters.json
+
+        # For large datasets (low memory mode):
+        python -m commands.dedup_find_duplicates \\
+            --input-dir DATA/dedup/simhashes \\
+            --output-file DATA/dedup/clusters.json \\
+            --streaming --benchmark
     """
     simhash_files = sorted(input_dir.glob("*.simhashes.jsonl"))
     if not simhash_files:
         raise click.ClickException(f"No *.simhashes.jsonl files found in {input_dir}")
+
+    # Dispatch to streaming mode if requested
+    if streaming:
+        logger.info("Running in STREAMING mode (disk-based, low memory)")
+        _run_streaming_mode(simhash_files, output_file, threshold, benchmark)
+        return
+
+    # --- In-memory mode below ---
+    if workers:
+        logger.info(f"Running in IN-MEMORY mode with {workers} workers")
 
     timings: dict[str, float] = {}
 
@@ -166,8 +458,7 @@ def main(input_dir: Path, output_file: Path, threshold: int, workers: int | None
     logger.info(f"Processing {len(all_buckets)} buckets with {num_workers} workers...")
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
-            executor.submit(_process_buckets, chunk, max_bucket_size)
-            for chunk in bucket_chunks
+            executor.submit(_process_buckets, chunk, max_bucket_size) for chunk in bucket_chunks
         ]
         for future in tqdm(futures, desc="Finding pairs"):
             chunk_candidates, chunk_skipped = future.result()
@@ -190,16 +481,14 @@ def main(input_dir: Path, output_file: Path, threshold: int, workers: int | None
     candidates_list = list(candidates)
     chunk_size = max(1, len(candidates_list) // num_workers)
     pair_chunks = [
-        candidates_list[i : i + chunk_size]
-        for i in range(0, len(candidates_list), chunk_size)
+        candidates_list[i : i + chunk_size] for i in range(0, len(candidates_list), chunk_size)
     ]
 
     verified_pairs: list[tuple[str, str]] = []
     logger.info(f"Verifying {len(candidates_list)} pairs with {num_workers} workers...")
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
-            executor.submit(_verify_pairs, chunk, hash_lookup, threshold)
-            for chunk in pair_chunks
+            executor.submit(_verify_pairs, chunk, hash_lookup, threshold) for chunk in pair_chunks
         ]
         for future in tqdm(futures, desc="Verifying pairs"):
             verified_pairs.extend(future.result())
