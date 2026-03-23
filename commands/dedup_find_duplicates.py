@@ -8,6 +8,7 @@ This is phase 2 of the deduplication workflow:
 """
 
 import array
+import itertools
 import json
 import os
 import subprocess
@@ -274,28 +275,53 @@ def _run_streaming_mode(
         logger.info(f"Split into {len(bucket_chunks)} chunks of up to {chunk_size} buckets each")
 
         # Process bucket chunks in parallel, passing only needed hashes per chunk
+        # Use a sliding window to interleave extraction, submission, and result collection
         seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            # Submit all chunks, each with only the hashes it needs
-            futures = []
-            for chunk in bucket_chunks:
-                # Extract only the doc_ids needed for this chunk
-                needed_ids = set(doc_id for bucket in chunk for doc_id in bucket)
-                chunk_hashes = {doc_id: hash_lookup[doc_id] for doc_id in needed_ids}
-                futures.append(
-                    executor.submit(
-                        _process_bucket_batch, chunk, chunk_hashes, threshold, max_bucket_size
-                    )
-                )
+        max_pending = num_workers * 2  # Keep queue fed but not too deep
 
-            for future in tqdm(futures, desc="Processing batches"):
-                verified_pairs = future.result()
-                for d1, d2 in verified_pairs:
-                    pair = (d1, d2) if d1 < d2 else (d2, d1)
-                    if pair not in seen_pairs:
-                        seen_pairs.add(pair)
-                        uf.union(d1, d2)
-                        duplicates_found += 1
+        def extract_and_submit(executor, chunk):
+            """Extract needed hashes and submit chunk for processing."""
+            needed_ids = {doc_id for bucket in chunk for doc_id in bucket}
+            chunk_hashes = {doc_id: hash_lookup[doc_id] for doc_id in needed_ids}
+            return executor.submit(
+                _process_bucket_batch, chunk, chunk_hashes, threshold, max_bucket_size
+            )
+
+        def process_result(future):
+            """Process a completed future's results."""
+            nonlocal duplicates_found
+            verified_pairs = future.result()
+            for d1, d2 in verified_pairs:
+                pair = (d1, d2) if d1 < d2 else (d2, d1)
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    uf.union(d1, d2)
+                    duplicates_found += 1
+
+        from concurrent.futures import FIRST_COMPLETED, wait
+
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            pending: set = set()
+            chunk_iter = iter(bucket_chunks)
+
+            with tqdm(total=len(bucket_chunks), desc="Processing batches") as pbar:
+                # Initial fill: submit up to max_pending chunks
+                for chunk in itertools.islice(chunk_iter, max_pending):
+                    pending.add(extract_and_submit(executor, chunk))
+
+                # Process results and keep submitting until done
+                while pending:
+                    # Wait for at least one to complete
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+
+                    # Process completed futures
+                    for future in done:
+                        process_result(future)
+                        pbar.update(1)
+
+                    # Submit more work to keep the queue full
+                    for chunk in itertools.islice(chunk_iter, len(done)):
+                        pending.add(extract_and_submit(executor, chunk))
 
         timings["4_process_buckets"] = time.perf_counter() - t0
 
