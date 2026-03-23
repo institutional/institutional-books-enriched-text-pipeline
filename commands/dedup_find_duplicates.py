@@ -8,8 +8,10 @@ This is phase 2 of the deduplication workflow:
 """
 
 import array
+import ctypes
 import itertools
 import json
+import mmap
 import os
 import subprocess
 import tempfile
@@ -165,6 +167,64 @@ def _process_bucket_batch(
     return all_verified
 
 
+# ============================================================================
+# mmap-based worker functions (for low memory overhead with many workers)
+# ============================================================================
+
+# Global state for worker processes (set by initializer)
+_worker_hashes_mmap = None
+_worker_hashes_array = None
+_worker_file_handle = None
+
+
+def _init_worker_mmap(hash_file_path: str, n_hashes: int) -> None:
+    """Initialize worker with mmap'd hash file."""
+    global _worker_hashes_mmap, _worker_hashes_array, _worker_file_handle
+
+    _worker_file_handle = open(hash_file_path, "rb")
+    _worker_hashes_mmap = mmap.mmap(
+        _worker_file_handle.fileno(), 0, access=mmap.ACCESS_READ
+    )
+    # Cast mmap to array of uint64 for fast indexed access
+    _worker_hashes_array = (ctypes.c_uint64 * n_hashes).from_buffer_copy(
+        _worker_hashes_mmap
+    )
+
+
+def _process_bucket_mmap(
+    doc_indices: list[int],
+    threshold: int,
+    max_bucket_size: int,
+) -> list[tuple[int, int]]:
+    """Process a single bucket using mmap'd hashes."""
+    if len(doc_indices) > max_bucket_size:
+        return []
+
+    verified = []
+    doc_indices_sorted = sorted(doc_indices)
+    for i, d1 in enumerate(doc_indices_sorted):
+        # Read 128-bit hash as two 64-bit values
+        h1 = _worker_hashes_array[d1 * 2] | (_worker_hashes_array[d1 * 2 + 1] << 64)
+        for d2 in doc_indices_sorted[i + 1 :]:
+            h2 = _worker_hashes_array[d2 * 2] | (_worker_hashes_array[d2 * 2 + 1] << 64)
+            if hamming_distance(h1, h2) <= threshold:
+                verified.append((d1, d2))
+    return verified
+
+
+def _process_bucket_batch_mmap(
+    buckets: list[list[int]],
+    threshold: int,
+    max_bucket_size: int,
+) -> list[tuple[int, int]]:
+    """Process a batch of buckets using mmap'd hashes."""
+    all_verified = []
+    for doc_indices in buckets:
+        verified = _process_bucket_mmap(doc_indices, threshold, max_bucket_size)
+        all_verified.extend(verified)
+    return all_verified
+
+
 def _run_streaming_mode(
     simhash_files: list[Path],
     output_file: Path,
@@ -241,20 +301,21 @@ def _run_streaming_mode(
         # Remove unsorted file to free disk space
         bands_unsorted.unlink()
 
-        # Phase 4: Stream through sorted file, process buckets, build union-find
+        # Phase 4: Process buckets with mmap'd hashes (no per-chunk serialization)
         t0 = time.perf_counter()
-        logger.info(f"Processing buckets with {num_workers} workers...")
+        logger.info(f"Processing buckets with {num_workers} workers (mmap mode)...")
         uf = UnionFindInt(n_records)
         duplicates_found = 0
         buckets_skipped = 0
 
-        # Build full hash lookup once (dict of int -> int, not the array)
-        # This takes far less RAM than the whole array.
-        hash_lookup: dict[int, int] = {}
-        for idx in range(n_records):
-            hash_lookup[idx] = hashes[idx * 2] | (hashes[idx * 2 + 1] << 64)
+        # Write hashes to a binary file for mmap
+        hash_file = temp_path / "hashes.bin"
+        logger.info(f"Writing hashes to {hash_file}...")
+        with open(hash_file, "wb") as f:
+            hashes.tofile(f)
+        n_hashes = len(hashes)  # Number of uint64 values (2 per record)
 
-        # Count buckets and collect them (we need to iterate twice anyway for progress)
+        # Collect buckets
         logger.info("Collecting buckets...")
         all_buckets: list[list[int]] = []
         for _band_key, doc_indices in _stream_buckets(bands_sorted):
@@ -266,26 +327,16 @@ def _run_streaming_mode(
         logger.info(f"Found {len(all_buckets)} buckets to process ({buckets_skipped} skipped)")
 
         # Partition buckets into chunks for parallel processing
-        # Use smaller chunks than num_workers for better load balancing and smaller hash subsets
-        max_buckets_per_chunk = 10_000  # Keeps hash subset to ~100K entries (~2-5 MB)
+        max_buckets_per_chunk = 10_000
         chunk_size = min(max_buckets_per_chunk, max(1, len(all_buckets) // (num_workers * 4)))
         bucket_chunks = [
             all_buckets[i : i + chunk_size] for i in range(0, len(all_buckets), chunk_size)
         ]
         logger.info(f"Split into {len(bucket_chunks)} chunks of up to {chunk_size} buckets each")
 
-        # Process bucket chunks in parallel, passing only needed hashes per chunk
-        # Use a sliding window to interleave extraction, submission, and result collection
-        seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
-        max_pending = num_workers * 2  # Keep queue fed but not too deep
-
-        def extract_and_submit(executor, chunk):
-            """Extract needed hashes and submit chunk for processing."""
-            needed_ids = {doc_id for bucket in chunk for doc_id in bucket}
-            chunk_hashes = {doc_id: hash_lookup[doc_id] for doc_id in needed_ids}
-            return executor.submit(
-                _process_bucket_batch, chunk, chunk_hashes, threshold, max_bucket_size
-            )
+        # Process bucket chunks in parallel using mmap'd hashes
+        seen_pairs: set[tuple[int, int]] = set()
+        max_pending = num_workers * 2
 
         def process_result(future):
             """Process a completed future's results."""
@@ -301,11 +352,16 @@ def _run_streaming_mode(
         from concurrent.futures import FIRST_COMPLETED, wait
 
         # Diagnostic timing for bottleneck analysis
-        time_wait = 0.0  # Time waiting for workers
-        time_process = 0.0  # Time processing results in main process
-        time_submit = 0.0  # Time extracting hashes and submitting
+        time_wait = 0.0
+        time_process = 0.0
+        time_submit = 0.0
 
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        # Use initializer to mmap hash file in each worker (done once per worker)
+        with ProcessPoolExecutor(
+            max_workers=num_workers,
+            initializer=_init_worker_mmap,
+            initargs=(str(hash_file), n_hashes),
+        ) as executor:
             pending: set = set()
             chunk_iter = iter(bucket_chunks)
 
@@ -313,39 +369,42 @@ def _run_streaming_mode(
                 # Initial fill: submit up to max_pending chunks
                 t_submit = time.perf_counter()
                 for chunk in itertools.islice(chunk_iter, max_pending):
-                    pending.add(extract_and_submit(executor, chunk))
+                    # No hash extraction needed - workers read from mmap
+                    pending.add(
+                        executor.submit(_process_bucket_batch_mmap, chunk, threshold, max_bucket_size)
+                    )
                 time_submit += time.perf_counter() - t_submit
 
                 # Process results and keep submitting until done
                 while pending:
-                    # Wait for at least one to complete
                     t_wait = time.perf_counter()
                     done, pending = wait(pending, return_when=FIRST_COMPLETED)
                     time_wait += time.perf_counter() - t_wait
 
-                    # Process completed futures
                     t_process = time.perf_counter()
                     for future in done:
                         process_result(future)
                         pbar.update(1)
                     time_process += time.perf_counter() - t_process
 
-                    # Submit more work to keep the queue full
                     t_submit = time.perf_counter()
                     for chunk in itertools.islice(chunk_iter, len(done)):
-                        pending.add(extract_and_submit(executor, chunk))
+                        pending.add(
+                            executor.submit(_process_bucket_batch_mmap, chunk, threshold, max_bucket_size)
+                        )
                     time_submit += time.perf_counter() - t_submit
 
         timings["4_process_buckets"] = time.perf_counter() - t0
 
         if benchmark:
             total_inner = time_wait + time_process + time_submit
-            logger.info("-" * 40)
-            logger.info("Phase 4 breakdown (main process):")
-            logger.info(f"  wait (workers):   {time_wait:.2f}s ({100*time_wait/total_inner:.1f}%)")
-            logger.info(f"  process results:  {time_process:.2f}s ({100*time_process/total_inner:.1f}%)")
-            logger.info(f"  extract+submit:   {time_submit:.2f}s ({100*time_submit/total_inner:.1f}%)")
-            logger.info("-" * 40)
+            if total_inner > 0:
+                logger.info("-" * 40)
+                logger.info("Phase 4 breakdown (main process):")
+                logger.info(f"  wait (workers):   {time_wait:.2f}s ({100*time_wait/total_inner:.1f}%)")
+                logger.info(f"  process results:  {time_process:.2f}s ({100*time_process/total_inner:.1f}%)")
+                logger.info(f"  submit:           {time_submit:.2f}s ({100*time_submit/total_inner:.1f}%)")
+                logger.info("-" * 40)
 
         if buckets_skipped > 0:
             logger.info(f"Skipped {buckets_skipped} buckets exceeding {max_bucket_size} docs")
