@@ -248,6 +248,7 @@ def _run_streaming_mode(
         buckets_skipped = 0
 
         # Build full hash lookup once (dict of int -> int, not the array)
+        # This takes far less RAM than the whole array.
         hash_lookup: dict[int, int] = {}
         for idx in range(n_records):
             hash_lookup[idx] = hashes[idx * 2] | (hashes[idx * 2 + 1] << 64)
@@ -264,19 +265,29 @@ def _run_streaming_mode(
         logger.info(f"Found {len(all_buckets)} buckets to process ({buckets_skipped} skipped)")
 
         # Partition buckets into chunks for parallel processing
-        chunk_size = max(1, len(all_buckets) // num_workers)
+        # Use smaller chunks than num_workers for better load balancing and smaller hash subsets
+        max_buckets_per_chunk = 10_000  # Keeps hash subset to ~100K entries (~2-5 MB)
+        chunk_size = min(max_buckets_per_chunk, max(1, len(all_buckets) // (num_workers * 4)))
         bucket_chunks = [
-            all_buckets[i : i + chunk_size]
-            for i in range(0, len(all_buckets), chunk_size)
+            all_buckets[i : i + chunk_size] for i in range(0, len(all_buckets), chunk_size)
         ]
+        logger.info(f"Split into {len(bucket_chunks)} chunks of up to {chunk_size} buckets each")
 
-        # Process bucket chunks in parallel
+        # Process bucket chunks in parallel, passing only needed hashes per chunk
         seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = [
-                executor.submit(_process_bucket_batch, chunk, hash_lookup, threshold, max_bucket_size)
-                for chunk in bucket_chunks
-            ]
+            # Submit all chunks, each with only the hashes it needs
+            futures = []
+            for chunk in bucket_chunks:
+                # Extract only the doc_ids needed for this chunk
+                needed_ids = set(doc_id for bucket in chunk for doc_id in bucket)
+                chunk_hashes = {doc_id: hash_lookup[doc_id] for doc_id in needed_ids}
+                futures.append(
+                    executor.submit(
+                        _process_bucket_batch, chunk, chunk_hashes, threshold, max_bucket_size
+                    )
+                )
+
             for future in tqdm(futures, desc="Processing batches"):
                 verified_pairs = future.result()
                 for d1, d2 in verified_pairs:
