@@ -5,6 +5,7 @@
  * n-grams with entropy filtering. It handles UTF-8 text and provides
  * functions for computing simhashes, Hamming distances, and LSH bands.
  */
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -503,6 +504,80 @@ namespace idi_simhash {
         }
 
         return bands;
+    }
+
+    //-----------------------------------------------------------------------------
+    // Bucket processing for deduplication
+    //-----------------------------------------------------------------------------
+
+    /**
+     * Process a single bucket: generate all pairs and return those within threshold.
+     *
+     * @param doc_indices  Vector of document indices in this bucket
+     * @param hashes       Pointer to hash array (2 uint64_t values per doc: lo, hi)
+     * @param threshold    Maximum Hamming distance to consider a duplicate
+     * @param max_bucket_size  Skip buckets larger than this
+     * @return Vector of (d1, d2) pairs that are duplicates
+     */
+    std::vector<std::pair<int, int>> process_bucket(
+        const std::vector<int>& doc_indices,
+        const uint64_t* hashes,
+        int threshold,
+        int max_bucket_size
+    ) {
+        std::vector<std::pair<int, int>> verified;
+
+        if (static_cast<int>(doc_indices.size()) > max_bucket_size) {
+            return verified;  // Skip oversized buckets
+        }
+
+        // Sort indices for consistent ordering
+        std::vector<int> sorted_indices = doc_indices;
+        std::sort(sorted_indices.begin(), sorted_indices.end());
+
+        int n = static_cast<int>(sorted_indices.size());
+        for (int i = 0; i < n; i++) {
+            int d1 = sorted_indices[i];
+            uint64_t h1_lo = hashes[d1 * 2];
+            uint64_t h1_hi = hashes[d1 * 2 + 1];
+
+            for (int j = i + 1; j < n; j++) {
+                int d2 = sorted_indices[j];
+                uint64_t h2_lo = hashes[d2 * 2];
+                uint64_t h2_hi = hashes[d2 * 2 + 1];
+
+                if (hamming_distance(h1_lo, h1_hi, h2_lo, h2_hi) <= threshold) {
+                    verified.emplace_back(d1, d2);
+                }
+            }
+        }
+
+        return verified;
+    }
+
+    /**
+     * Process a batch of buckets.
+     *
+     * @param buckets      Vector of buckets, each bucket is a vector of doc indices
+     * @param hashes       Pointer to hash array (2 uint64_t values per doc: lo, hi)
+     * @param threshold    Maximum Hamming distance to consider a duplicate
+     * @param max_bucket_size  Skip buckets larger than this
+     * @return Vector of (d1, d2) pairs that are duplicates
+     */
+    std::vector<std::pair<int, int>> process_bucket_batch(
+        const std::vector<std::vector<int>>& buckets,
+        const uint64_t* hashes,
+        int threshold,
+        int max_bucket_size
+    ) {
+        std::vector<std::pair<int, int>> all_verified;
+
+        for (const auto& bucket : buckets) {
+            auto verified = process_bucket(bucket, hashes, threshold, max_bucket_size);
+            all_verified.insert(all_verified.end(), verified.begin(), verified.end());
+        }
+
+        return all_verified;
     }
 
 } // namespace idi_simhash

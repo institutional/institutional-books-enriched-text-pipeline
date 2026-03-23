@@ -20,6 +20,8 @@ namespace idi_simhash {
    int hamming_distance(uint64_t h1_lo, uint64_t h1_hi, uint64_t h2_lo, uint64_t h2_hi);
    bool are_near_duplicates(uint64_t h1_lo, uint64_t h1_hi, uint64_t h2_lo, uint64_t h2_hi, int threshold);
    std::vector<uint32_t> extract_bands(uint64_t hash_lo, uint64_t hash_hi);
+   std::vector<std::pair<int, int>> process_bucket(const std::vector<int>& doc_indices, const uint64_t* hashes, int threshold, int max_bucket_size);
+   std::vector<std::pair<int, int>> process_bucket_batch(const std::vector<std::vector<int>>& buckets, const uint64_t* hashes, int threshold, int max_bucket_size);
 }
 
 /**
@@ -86,6 +88,57 @@ std::vector<uint32_t> py_extract_bands(py::object hash_value) {
    return idi_simhash::extract_bands(hash_lo, hash_hi);
 }
 
+/**
+ * Process a single bucket using a buffer of hashes.
+ * The buffer should be an array of uint64_t values (2 per document: lo, hi).
+ */
+py::list py_process_bucket(
+    const std::vector<int>& doc_indices,
+    py::buffer hashes_buffer,
+    int threshold,
+    int max_bucket_size
+) {
+    py::buffer_info info = hashes_buffer.request();
+
+    if (info.format != py::format_descriptor<uint64_t>::format()) {
+        throw std::runtime_error("Hash buffer must be uint64 array");
+    }
+
+    const uint64_t* hashes = static_cast<const uint64_t*>(info.ptr);
+    auto verified = idi_simhash::process_bucket(doc_indices, hashes, threshold, max_bucket_size);
+
+    py::list result;
+    for (const auto& [d1, d2] : verified) {
+        result.append(py::make_tuple(d1, d2));
+    }
+    return result;
+}
+
+/**
+ * Process a batch of buckets using a buffer of hashes.
+ */
+py::list py_process_bucket_batch(
+    const std::vector<std::vector<int>>& buckets,
+    py::buffer hashes_buffer,
+    int threshold,
+    int max_bucket_size
+) {
+    py::buffer_info info = hashes_buffer.request();
+
+    if (info.format != py::format_descriptor<uint64_t>::format()) {
+        throw std::runtime_error("Hash buffer must be uint64 array");
+    }
+
+    const uint64_t* hashes = static_cast<const uint64_t*>(info.ptr);
+    auto verified = idi_simhash::process_bucket_batch(buckets, hashes, threshold, max_bucket_size);
+
+    py::list result;
+    for (const auto& [d1, d2] : verified) {
+        result.append(py::make_tuple(d1, d2));
+    }
+    return result;
+}
+
 PYBIND11_MODULE(_simhash_cpp, m) {
    m.doc() = "High-performance simhash implementation in C++";
 
@@ -117,4 +170,18 @@ PYBIND11_MODULE(_simhash_cpp, m) {
    m.def("normalize_text", &idi_simhash::normalize_text,
          py::arg("text"),
          "Normalize text by lowercasing");
+
+   m.def("process_bucket", &py_process_bucket,
+         py::arg("doc_indices"),
+         py::arg("hashes_buffer"),
+         py::arg("threshold"),
+         py::arg("max_bucket_size"),
+         "Process a single bucket and return duplicate pairs");
+
+   m.def("process_bucket_batch", &py_process_bucket_batch,
+         py::arg("buckets"),
+         py::arg("hashes_buffer"),
+         py::arg("threshold"),
+         py::arg("max_bucket_size"),
+         "Process a batch of buckets and return duplicate pairs");
 }

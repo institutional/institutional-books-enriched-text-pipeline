@@ -171,24 +171,42 @@ def _process_bucket_batch(
 # mmap-based worker functions (for low memory overhead with many workers)
 # ============================================================================
 
+# Try to import C++ extension for fast bucket processing
+_cpp_bucket_module = None
+try:
+    from extensions.built import _simhash_cpp
+
+    # Only use if the bucket processing functions are available
+    if hasattr(_simhash_cpp, "process_bucket_batch"):
+        _cpp_bucket_module = _simhash_cpp
+except ImportError:
+    pass
+
 # Global state for worker processes (set by initializer)
 _worker_hashes_mmap = None
 _worker_hashes_array = None
+_worker_hashes_buffer = None  # For C++ (needs buffer protocol)
 _worker_file_handle = None
 
 
 def _init_worker_mmap(hash_file_path: str, n_hashes: int) -> None:
     """Initialize worker with mmap'd hash file."""
-    global _worker_hashes_mmap, _worker_hashes_array, _worker_file_handle
+    global _worker_hashes_mmap, _worker_hashes_array, _worker_hashes_buffer, _worker_file_handle
 
     _worker_file_handle = open(hash_file_path, "rb")
     _worker_hashes_mmap = mmap.mmap(
         _worker_file_handle.fileno(), 0, access=mmap.ACCESS_READ
     )
-    # Cast mmap to array of uint64 for fast indexed access
-    _worker_hashes_array = (ctypes.c_uint64 * n_hashes).from_buffer_copy(
-        _worker_hashes_mmap
-    )
+
+    if _cpp_bucket_module is not None:
+        # For C++: create an array that exposes buffer protocol
+        _worker_hashes_buffer = array.array("Q")
+        _worker_hashes_buffer.frombytes(_worker_hashes_mmap[:])
+    else:
+        # For Python: cast mmap to array of uint64 for indexed access
+        _worker_hashes_array = (ctypes.c_uint64 * n_hashes).from_buffer_copy(
+            _worker_hashes_mmap
+        )
 
 
 def _process_bucket_mmap(
@@ -197,6 +215,13 @@ def _process_bucket_mmap(
     max_bucket_size: int,
 ) -> list[tuple[int, int]]:
     """Process a single bucket using mmap'd hashes."""
+    if _cpp_bucket_module is not None:
+        # Use C++ implementation
+        return _cpp_bucket_module.process_bucket(
+            doc_indices, _worker_hashes_buffer, threshold, max_bucket_size
+        )
+
+    # Python fallback
     if len(doc_indices) > max_bucket_size:
         return []
 
@@ -218,6 +243,13 @@ def _process_bucket_batch_mmap(
     max_bucket_size: int,
 ) -> list[tuple[int, int]]:
     """Process a batch of buckets using mmap'd hashes."""
+    if _cpp_bucket_module is not None:
+        # Use C++ implementation
+        return _cpp_bucket_module.process_bucket_batch(
+            buckets, _worker_hashes_buffer, threshold, max_bucket_size
+        )
+
+    # Python fallback
     all_verified = []
     for doc_indices in buckets:
         verified = _process_bucket_mmap(doc_indices, threshold, max_bucket_size)

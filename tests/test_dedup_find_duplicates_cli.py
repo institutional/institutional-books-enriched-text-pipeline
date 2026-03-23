@@ -266,4 +266,7 @@ class TestDedupFindDuplicatesCLI:
         data_streaming = json.loads(output_streaming.read_text())
 
         assert data_default["statistics"] == data_streaming["statistics"]
-        assert data_default["clusters"] == data_streaming["clusters"]
+        # Compare cluster contents (representatives may differ due to processing order)
+        default_clusters = sorted(sorted(v) for v in data_default["clusters"].values())
+        streaming_clusters = sorted(sorted(v) for v in data_streaming["clusters"].values())
+        assert default_clusters == streaming_clusters
