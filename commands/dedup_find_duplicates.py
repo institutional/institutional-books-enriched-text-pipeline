@@ -131,7 +131,7 @@ def _stream_buckets(sorted_path: Path):
 
 def _process_bucket_streaming(
     doc_indices: list[int],
-    hashes: array.array,
+    hash_lookup: dict[int, int],
     threshold: int,
     max_bucket_size: int,
 ) -> list[tuple[int, int]]:
@@ -142,12 +142,26 @@ def _process_bucket_streaming(
     verified = []
     doc_indices_sorted = sorted(doc_indices)
     for i, d1 in enumerate(doc_indices_sorted):
-        h1 = hashes[d1 * 2] | (hashes[d1 * 2 + 1] << 64)
+        h1 = hash_lookup[d1]
         for d2 in doc_indices_sorted[i + 1 :]:
-            h2 = hashes[d2 * 2] | (hashes[d2 * 2 + 1] << 64)
+            h2 = hash_lookup[d2]
             if hamming_distance(h1, h2) <= threshold:
                 verified.append((d1, d2))
     return verified
+
+
+def _process_bucket_batch(
+    buckets: list[list[int]],
+    hash_lookup: dict[int, int],
+    threshold: int,
+    max_bucket_size: int,
+) -> list[tuple[int, int]]:
+    """Process a batch of buckets, returning all verified pairs."""
+    all_verified = []
+    for doc_indices in buckets:
+        verified = _process_bucket_streaming(doc_indices, hash_lookup, threshold, max_bucket_size)
+        all_verified.extend(verified)
+    return all_verified
 
 
 def _run_streaming_mode(
@@ -155,6 +169,7 @@ def _run_streaming_mode(
     output_file: Path,
     threshold: int,
     benchmark: bool,
+    workers: int | None = None,
     max_bucket_size: int = 10_000,
 ) -> None:
     """Run deduplication in streaming mode with external sort.
@@ -162,6 +177,7 @@ def _run_streaming_mode(
     Memory usage: ~16 bytes per paragraph (for hash array) + ~8 bytes per
     paragraph (for union-find) + sort buffer. For 1B paragraphs: ~35GB.
     """
+    num_workers = workers or os.cpu_count() or 1
     timings: dict[str, float] = {}
 
     # Phase 1: Load records into memory-efficient structures
@@ -226,35 +242,49 @@ def _run_streaming_mode(
 
         # Phase 4: Stream through sorted file, process buckets, build union-find
         t0 = time.perf_counter()
-        logger.info("Processing buckets and verifying pairs...")
+        logger.info(f"Processing buckets with {num_workers} workers...")
         uf = UnionFindInt(n_records)
         duplicates_found = 0
-        buckets_processed = 0
         buckets_skipped = 0
 
-        # Count buckets first for progress bar
-        logger.info("Counting buckets...")
-        bucket_count = sum(1 for _ in _stream_buckets(bands_sorted))
-        logger.info(f"Found {bucket_count} buckets with 2+ documents")
+        # Build full hash lookup once (dict of int -> int, not the array)
+        hash_lookup: dict[int, int] = {}
+        for idx in range(n_records):
+            hash_lookup[idx] = hashes[idx * 2] | (hashes[idx * 2 + 1] << 64)
 
-        # Process buckets
-        seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
-        for _band_key, doc_indices in tqdm(
-            _stream_buckets(bands_sorted), total=bucket_count, desc="Processing"
-        ):
+        # Count buckets and collect them (we need to iterate twice anyway for progress)
+        logger.info("Collecting buckets...")
+        all_buckets: list[list[int]] = []
+        for _band_key, doc_indices in _stream_buckets(bands_sorted):
             if len(doc_indices) > max_bucket_size:
                 buckets_skipped += 1
                 continue
+            all_buckets.append(doc_indices)
 
-            verified = _process_bucket_streaming(doc_indices, hashes, threshold, max_bucket_size)
-            for d1, d2 in verified:
-                pair = (d1, d2) if d1 < d2 else (d2, d1)
-                if pair not in seen_pairs:
-                    seen_pairs.add(pair)
-                    uf.union(d1, d2)
-                    duplicates_found += 1
+        logger.info(f"Found {len(all_buckets)} buckets to process ({buckets_skipped} skipped)")
 
-            buckets_processed += 1
+        # Partition buckets into chunks for parallel processing
+        chunk_size = max(1, len(all_buckets) // num_workers)
+        bucket_chunks = [
+            all_buckets[i : i + chunk_size]
+            for i in range(0, len(all_buckets), chunk_size)
+        ]
+
+        # Process bucket chunks in parallel
+        seen_pairs: set[tuple[int, int]] = set()  # Dedupe across bands
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            futures = [
+                executor.submit(_process_bucket_batch, chunk, hash_lookup, threshold, max_bucket_size)
+                for chunk in bucket_chunks
+            ]
+            for future in tqdm(futures, desc="Processing batches"):
+                verified_pairs = future.result()
+                for d1, d2 in verified_pairs:
+                    pair = (d1, d2) if d1 < d2 else (d2, d1)
+                    if pair not in seen_pairs:
+                        seen_pairs.add(pair)
+                        uf.union(d1, d2)
+                        duplicates_found += 1
 
         timings["4_process_buckets"] = time.perf_counter() - t0
 
@@ -389,7 +419,7 @@ def main(
     # Dispatch to streaming mode if requested
     if streaming:
         logger.info("Running in STREAMING mode (disk-based, low memory)")
-        _run_streaming_mode(simhash_files, output_file, threshold, benchmark)
+        _run_streaming_mode(simhash_files, output_file, threshold, benchmark, workers)
         return
 
     # --- In-memory mode below ---
