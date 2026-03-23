@@ -169,8 +169,8 @@ class TestDedupFindDuplicatesCLI:
 
         assert result.exit_code != 0
 
-    def test_streaming_mode_processes_files(self, tmp_path: Path):
-        """Test that streaming mode reads simhash files and writes clusters JSON."""
+    def test_benchmark_flag(self, tmp_path: Path):
+        """Test that benchmark flag works without errors."""
         input_dir = tmp_path / "simhashes"
         input_dir.mkdir()
         output_file = tmp_path / "clusters.json"
@@ -186,29 +186,22 @@ class TestDedupFindDuplicatesCLI:
             [
                 "--input-dir", str(input_dir),
                 "--output-file", str(output_file),
-                "--streaming",
+                "--benchmark",
             ],
         )
 
         assert result.exit_code == 0
         assert output_file.exists()
+        # Benchmark timing output goes to stderr via loguru (visible in test logs)
 
-        output_data = json.loads(output_file.read_text())
-        assert "clusters" in output_data
-        assert "statistics" in output_data
-
-    def test_streaming_mode_finds_duplicates(self, tmp_path: Path):
-        """Test that streaming mode correctly identifies duplicate hashes."""
+    def test_workers_parameter(self, tmp_path: Path):
+        """Test that workers parameter is accepted."""
         input_dir = tmp_path / "simhashes"
         input_dir.mkdir()
         output_file = tmp_path / "clusters.json"
 
-        # Same hash = exact duplicate
-        identical_hash = 123456789012345678901234567890
-        simhash1 = {"book_id": "book1", "simhashes": [identical_hash]}
-        simhash2 = {"book_id": "book2", "simhashes": [identical_hash]}
-        (input_dir / "shard1.simhashes.jsonl").write_text(json.dumps(simhash1))
-        (input_dir / "shard2.simhashes.jsonl").write_text(json.dumps(simhash2))
+        simhash = {"book_id": "book1", "simhashes": [12345]}
+        (input_dir / "shard1.simhashes.jsonl").write_text(json.dumps(simhash))
 
         runner = CliRunner()
         result = runner.invoke(
@@ -216,57 +209,9 @@ class TestDedupFindDuplicatesCLI:
             [
                 "--input-dir", str(input_dir),
                 "--output-file", str(output_file),
-                "--streaming",
+                "--workers", "2",
             ],
         )
 
         assert result.exit_code == 0
-
-        output_data = json.loads(output_file.read_text())
-        # Should have 1 cluster with 2 members
-        assert output_data["statistics"]["clusters"] == 1
-        assert output_data["statistics"]["duplicate_pairs"] == 1
-
-    def test_streaming_mode_matches_default_mode(self, tmp_path: Path):
-        """Test that streaming mode produces same results as default mode."""
-        input_dir = tmp_path / "simhashes"
-        input_dir.mkdir()
-        output_default = tmp_path / "clusters_default.json"
-        output_streaming = tmp_path / "clusters_streaming.json"
-
-        # Create test data with some duplicates
-        identical_hash = 999999999999
-        simhash1 = {"book_id": "book1", "simhashes": [identical_hash, 111, 222]}
-        simhash2 = {"book_id": "book2", "simhashes": [identical_hash, 333, 444]}
-        (input_dir / "shard1.simhashes.jsonl").write_text(json.dumps(simhash1))
-        (input_dir / "shard2.simhashes.jsonl").write_text(json.dumps(simhash2))
-
-        runner = CliRunner()
-
-        # Run default mode
-        result_default = runner.invoke(
-            dedup_find_main,
-            ["--input-dir", str(input_dir), "--output-file", str(output_default)],
-        )
-        assert result_default.exit_code == 0
-
-        # Run streaming mode
-        result_streaming = runner.invoke(
-            dedup_find_main,
-            [
-                "--input-dir", str(input_dir),
-                "--output-file", str(output_streaming),
-                "--streaming",
-            ],
-        )
-        assert result_streaming.exit_code == 0
-
-        # Compare results
-        data_default = json.loads(output_default.read_text())
-        data_streaming = json.loads(output_streaming.read_text())
-
-        assert data_default["statistics"] == data_streaming["statistics"]
-        # Compare cluster contents (representatives may differ due to processing order)
-        default_clusters = sorted(sorted(v) for v in data_default["clusters"].values())
-        streaming_clusters = sorted(sorted(v) for v in data_streaming["clusters"].values())
-        assert default_clusters == streaming_clusters
+        assert output_file.exists()
