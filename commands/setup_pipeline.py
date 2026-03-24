@@ -268,19 +268,21 @@ def train_endmatter_classifiers(
     model_name: str = "BAAI/bge-m3",
     model_dim: int = 512,
     overwrite: bool = False,
+    m2v_training_data_dir: Path | None = None,
 ) -> None:
     """
     Train the endmatter classifiers (mmem_classifier and em_subclassifier).
 
     Requires:
         - Distilled model2vec model at output_dir/<model_name>_m2v_<dim>dim
-        - Training data at DATA/release_assets/m2v_training_data/
+        - Training data at m2v_training_data_dir (or default location)
 
     Args:
         output_dir: Directory containing distilled model and for classifier output
         model_name: Base model name used for distillation
         model_dim: Dimension used for distillation
         overwrite: If True, retrain even if classifiers exist
+        m2v_training_data_dir: Directory containing training data files
     """
     from utils.get_m2v_training_data import (
         get_subclassifier_training_path,
@@ -290,7 +292,7 @@ def train_endmatter_classifiers(
 
     # Check training data is available
     try:
-        get_training_data()
+        training_dir = get_training_data(output_dir=m2v_training_data_dir) if m2v_training_data_dir else get_training_data()
     except FileNotFoundError as e:
         logger.warning(f"Skipping classifier training: {e}")
         return
@@ -312,7 +314,7 @@ def train_endmatter_classifiers(
         logger.info("Training mmem_classifier (frontmatter/endmatter top classifier)...")
         try:
             train_m2v_classifier(
-                training_file=get_topclassifier_training_path(),
+                training_file=get_topclassifier_training_path(training_dir),
                 model_dir=distilled_model_dir,
                 output_dir=mmem_classifier_dir,
             )
@@ -327,7 +329,7 @@ def train_endmatter_classifiers(
         logger.info("Training em_subclassifier (endmatter subtype classifier)...")
         try:
             train_m2v_classifier(
-                training_file=get_subclassifier_training_path(),
+                training_file=get_subclassifier_training_path(training_dir),
                 model_dir=distilled_model_dir,
                 output_dir=em_subclassifier_dir,
             )
@@ -344,6 +346,7 @@ def setup_pipeline(
     model_name: str = "BAAI/bge-m3",
     model_dim: int = 512,
     overwrite: bool = False,
+    m2v_training_data_dir: Path | None = None,
 ) -> None:
     """
     Train all Ngram and Nupunkt LMs from shards.
@@ -435,6 +438,7 @@ def setup_pipeline(
             model_name=model_name,
             model_dim=model_dim,
             overwrite=overwrite,
+            m2v_training_data_dir=m2v_training_data_dir,
         )
 
     logger.info("\nSetup pipeline complete!")
@@ -492,6 +496,12 @@ def setup_pipeline(
     default=False,
     help="Overwrite existing models",
 )
+@click.option(
+    "--m2v-training-data-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Directory containing m2v training data (default: DATA/release_assets/m2v_training_data)",
+)
 def main(
     shard_dir: Path,
     output_dir: Path,
@@ -501,6 +511,7 @@ def main(
     model_name: str,
     model_dim: int,
     overwrite: bool,
+    m2v_training_data_dir: Path | None,
 ):
     """
     Train language models from prepared shards.
@@ -527,6 +538,7 @@ def main(
         model_name=model_name,
         model_dim=model_dim,
         overwrite=overwrite,
+        m2v_training_data_dir=m2v_training_data_dir,
     )
 
 

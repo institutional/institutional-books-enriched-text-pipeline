@@ -19,6 +19,7 @@ class ModelPaths:
     embedding: Path = Path("./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim")
     mmem_classifier: Path = Path("./DATA/pretrain/models/mmem_classifier")
     em_subclassifier: Path = Path("./DATA/pretrain/models/em_subclassifier")
+    m2v_training_data_dir: Path = Path("./DATA/release_assets/m2v_training_data")
 
 
 class ChunkingAlgorithm(str, Enum):
@@ -67,6 +68,11 @@ class PipelineConfig:
             em_subclassifier=Path(
                 data.get("model_paths", {}).get(
                     "em_subclassifier", "./DATA/pretrain/models/em_subclassifier"
+                )
+            ),
+            m2v_training_data_dir=Path(
+                data.get("model_paths", {}).get(
+                    "m2v_training_data_dir", "./DATA/release_assets/m2v_training_data"
                 )
             ),
         )
