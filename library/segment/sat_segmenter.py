@@ -33,7 +33,7 @@ def segment_book_sat(
         raise ValueError(f"{book_id} missing middlematter")
 
     if sat_model is None:
-        sat_model = get_sat_model()
+        sat_model = get_sat_model(config)
 
     # remove remaining newlines
     combined_middlematter = " ".join(middlematter_pages)
@@ -49,11 +49,11 @@ def segment_book_sat(
     return result
 
 
-def get_sat_model() -> SaT:
+def get_sat_model(config: PipelineConfig) -> SaT:
     """Get or load the SAT model (cached globally)."""
     global _sat_model
     if _sat_model is None:
-        _sat_model = load_sat_model()
+        _sat_model = load_sat_model(config.segment.sat_model_name)
     return _sat_model
 
 
@@ -69,16 +69,16 @@ def get_device() -> str:
         return "cpu"
 
 
-def load_sat_model() -> SaT:
+def load_sat_model(model_name: str = "sat-3l-sm") -> SaT:
     """Load the SaT model for segmentation."""
     device = get_device()
     if device == "cpu":
         raise RuntimeError(
             "No GPU available for SaT segmentation. Please run on a machine with a GPU."
         )
-    logger.info(f"Loading SAT on {device}.")
-    sat = SaT("sat-3l-sm")  # -sm means general segmentation
-    sat.half().to(device)  # larger models are available, but are expensive
+    logger.info(f"Loading SAT model {model_name} on {device}.")
+    sat = SaT(model_name)
+    sat.half().to(device)
     return sat
 
 

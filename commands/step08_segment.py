@@ -16,13 +16,13 @@ from library.segment.sat_segmenter import SaT, segment_book_sat
 _sat_model: SaT | None = None
 
 
-def get_sat_model() -> SaT:
+def get_sat_model(config: PipelineConfig) -> SaT:
     """Get or load the SAT model (cached)."""
     global _sat_model
     if _sat_model is None:
         from library.segment.sat_segmenter import get_sat_model as load_sat
 
-        _sat_model = load_sat()
+        _sat_model = load_sat(config)
     return _sat_model
 
 
@@ -43,7 +43,7 @@ def process_book(
     if segmenter == "nupunkt":
         return segment_book_nupunkt(book, config=config)
     else:
-        sat_model = get_sat_model()
+        sat_model = get_sat_model(config)
         return segment_book_sat(book, config=config, sat_model=sat_model)
 
 

@@ -27,11 +27,7 @@ def get_classifier(config: PipelineConfig) -> PageClassifier:
     """
     global _classifier
     if _classifier is None:
-        # The classifier path could come from config.
-        # This is the default path.
-        module_path = Path(__file__).parent
-        classifier_path = module_path / "../DATA/pretrain/models/mmem_classifier/"
-        _classifier = load_classifier(classifier_path)
+        _classifier = load_classifier(config.model_paths.mmem_classifier)
     return _classifier
 
 
