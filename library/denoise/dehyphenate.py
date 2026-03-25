@@ -88,7 +88,7 @@ def load_ngram_scorer(lang: str, model_dir: Path, cache: dict[str, NGramScorer])
 
     stats_path = model_dir / f"{lang}_ngram.json.gz"
     if not stats_path.exists():
-        raise IOError(
+        logger.warning(
             f"N-gram stats not found for language '{lang}': {model_dir}/{lang}_ngram.json.gz"
         )
     stats = load_ngram_stats(stats_path)

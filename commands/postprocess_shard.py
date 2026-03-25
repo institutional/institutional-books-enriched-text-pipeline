@@ -4,6 +4,7 @@ postprocess_shard.py - post-processing orchestrator for steps 13-15.
 Handles annotation, metadata computation, and cleanup after deduplication.
 """
 
+import gzip
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,7 +19,6 @@ from library.annotate.endmatter import load_em_subclassifier
 from library.annotate.middlematter import annotate_middlematter
 from library.metadata.perplexity_stats import compute_perplexity_stats
 from library.metadata.text_stats import compute_text_stats
-from utils.atomic_write import atomic_jsonl_writer
 from utils.jsonl_io import load_perplexity_map, open_jsonl
 
 # Fields to keep in final output (step15)
@@ -131,6 +131,59 @@ def postprocess_book(
         return current_book, error_msg
 
 
+def load_processed_barcodes(progress_path: Path) -> set[str]:
+    """Load set of already-processed barcodes from a progress file."""
+    processed = set()
+    if progress_path.exists():
+        with open(progress_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        record = json.loads(line)
+                        barcode = record.get("barcode_src")
+                        if barcode:
+                            processed.add(barcode)
+                    except json.JSONDecodeError:
+                        continue
+    return processed
+
+
+def finalize_output(
+    progress_path: Path,
+    final_path: Path,
+    compress: bool,
+) -> int:
+    """
+    Finalize output by moving progress file to final destination.
+
+    If compress=True, reads progress and writes compressed.
+    Otherwise, renames progress to final.
+
+    Returns the number of records.
+    """
+    if not progress_path.exists():
+        return 0
+
+    count = 0
+    if compress:
+        with (
+            open(progress_path, "r", encoding="utf-8") as f_in,
+            gzip.open(final_path, "wt", encoding="utf-8") as f_out,
+        ):
+            for line in f_in:
+                f_out.write(line)
+                count += 1
+        progress_path.unlink()
+    else:
+        # Count lines before rename
+        with open(progress_path, "r", encoding="utf-8") as f:
+            count = sum(1 for line in f if line.strip())
+        progress_path.rename(final_path)
+
+    return count
+
+
 def postprocess_shard(
     input_file: Path,
     output_file: Path,
@@ -140,6 +193,7 @@ def postprocess_shard(
     end_step: str | None = None,
     keep_sentences: bool = True,
     keep_indices: bool = True,
+    resume: bool = False,
 ) -> ProcessStats:
     """
     Post-process all books in a shard through steps 13-15.
@@ -155,6 +209,7 @@ def postprocess_shard(
         end_step: Last step to run (default: step15_clean)
         keep_sentences: Keep middlematter_sentences in final output
         keep_indices: Keep paragraph/section indices in final output
+        resume: If True, resume from previous progress
 
     Returns:
         Statistics dict with counts
@@ -174,51 +229,104 @@ def postprocess_shard(
     if perp_map:
         logger.info(f"Loaded perplexities for {len(perp_map)} books")
 
+    # Determine if output should be compressed
+    use_gzip = output_file.suffix == ".gz" or output_file.name.endswith(".jsonl.gz")
+
+    # Progress file paths (always uncompressed for append efficiency)
+    complete_progress = output_file.with_name(
+        output_file.name.replace(".jsonl.gz", ".progress.jsonl").replace(
+            ".jsonl", ".progress.jsonl"
+        )
+    )
     incomplete_path = output_file.with_suffix(".incomplete.jsonl")
+    incomplete_progress = incomplete_path.with_suffix(".progress.jsonl")
 
-    # Stream writes - only one book in memory at a time
-    with (
-        atomic_jsonl_writer(output_file) as complete_writer,
-        atomic_jsonl_writer(incomplete_path, compress=False) as incomplete_writer,
-        open_jsonl(input_file, "r") as f,
-    ):
-        for line_num, line in enumerate(f, 1):
-            try:
-                book = json.loads(line)
-            except json.JSONDecodeError as e:
-                logger.error(f"Line {line_num}: Invalid JSON: {e}")
-                continue
-
-            book_id = book.get("barcode_src", f"line_{line_num}")
-            logger.debug(f"Post-processing book {book_id}")
-
-            result_book, error_msg = postprocess_book(
-                book, steps, em_classifier, perp_map, keep_sentences, keep_indices
+    # Load previously processed barcodes if resuming
+    processed_barcodes: set[str] = set()
+    if resume:
+        processed_barcodes = load_processed_barcodes(complete_progress)
+        processed_barcodes |= load_processed_barcodes(incomplete_progress)
+        if processed_barcodes:
+            logger.info(
+                f"Resuming: found {len(processed_barcodes)} previously processed books"
             )
+        else:
+            logger.info("Resuming: no previous progress found, starting fresh")
+    else:
+        # Fresh start - remove any existing progress files
+        if complete_progress.exists():
+            complete_progress.unlink()
+        if incomplete_progress.exists():
+            incomplete_progress.unlink()
 
-            if error_msg is None:
-                result_book["_postprocessing_complete"] = True
-                result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
-                complete_writer.write_record(result_book)
-            else:
-                result_book["_postprocessing_complete"] = False
-                result_book["_postprocessing_error"] = error_msg
-                result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
-                incomplete_writer.write_record(result_book)
-                logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
+    # Open progress files for appending
+    complete_file = open(complete_progress, "a", encoding="utf-8")
+    incomplete_file = open(incomplete_progress, "a", encoding="utf-8")
 
-    complete_count = complete_writer.count
-    incomplete_count = incomplete_writer.count
+    complete_count = 0
+    incomplete_count = 0
+    skipped_count = 0
 
-    if incomplete_count > 0:
-        logger.warning(f"Wrote {incomplete_count} failures to {incomplete_path}")
+    try:
+        with open_jsonl(input_file, "r") as f:
+            for line_num, line in enumerate(f, 1):
+                try:
+                    book = json.loads(line)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Line {line_num}: Invalid JSON: {e}")
+                    continue
 
-    logger.info(f"Complete: {complete_count}, Incomplete: {incomplete_count}")
+                book_id = book.get("barcode_src", f"line_{line_num}")
+
+                # Skip if already processed
+                if book_id in processed_barcodes:
+                    skipped_count += 1
+                    continue
+
+                logger.debug(f"Post-processing book {book_id}")
+
+                result_book, error_msg = postprocess_book(
+                    book, steps, em_classifier, perp_map, keep_sentences, keep_indices
+                )
+
+                if error_msg is None:
+                    result_book["_postprocessing_complete"] = True
+                    result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
+                    complete_file.write(json.dumps(result_book, ensure_ascii=False))
+                    complete_file.write("\n")
+                    complete_file.flush()
+                    complete_count += 1
+                else:
+                    result_book["_postprocessing_complete"] = False
+                    result_book["_postprocessing_error"] = error_msg
+                    result_book["_postprocessed_at"] = datetime.now(UTC).isoformat()
+                    incomplete_file.write(json.dumps(result_book, ensure_ascii=False))
+                    incomplete_file.write("\n")
+                    incomplete_file.flush()
+                    incomplete_count += 1
+                    logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
+
+    finally:
+        complete_file.close()
+        incomplete_file.close()
+
+    # Account for previously processed books in totals
+    if resume and skipped_count > 0:
+        logger.info(f"Skipped {skipped_count} previously processed books")
+
+    # Finalize outputs: move progress files to final destinations
+    total_complete = finalize_output(complete_progress, output_file, use_gzip)
+    total_incomplete = finalize_output(incomplete_progress, incomplete_path, False)
+
+    if total_incomplete > 0:
+        logger.warning(f"Wrote {total_incomplete} failures to {incomplete_path}")
+
+    logger.info(f"Complete: {total_complete}, Incomplete: {total_incomplete}")
 
     return {
-        "total": complete_count + incomplete_count,
-        "complete": complete_count,
-        "incomplete": incomplete_count,
+        "total": total_complete + total_incomplete,
+        "complete": total_complete,
+        "incomplete": total_incomplete,
     }
 
 
@@ -269,6 +377,12 @@ def postprocess_shard(
     default=True,
     help="Keep paragraph/section indices in final output (default: keep)",
 )
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Resume from previous progress (skip already-processed books)",
+)
 def main(
     input_file: Path,
     output_file: Path,
@@ -278,12 +392,15 @@ def main(
     end_step: str | None,
     keep_sentences: bool,
     keep_indices: bool,
+    resume: bool,
 ):
     """
     Post-process a shard through steps 13-15 (annotate, metadata, clean).
 
     Reads books after deduplication and produces final annotated output
     with metadata statistics.
+
+    Use --resume to continue from a previous interrupted run.
 
     Example:
         python -m commands.postprocess_shard \\
@@ -296,6 +413,8 @@ def main(
 
     logger.info(f"Post-processing {input_file}")
     logger.info(f"Output: {output_file}")
+    if resume:
+        logger.info("Resume mode enabled")
 
     stats = postprocess_shard(
         input_file=input_file,
@@ -306,6 +425,7 @@ def main(
         end_step=end_step,
         keep_sentences=keep_sentences,
         keep_indices=keep_indices,
+        resume=resume,
     )
 
     click.echo("\nPost-processing complete:")

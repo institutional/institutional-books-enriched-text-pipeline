@@ -240,3 +240,173 @@ class TestPostprocessShardCLI:
         )
 
         assert result.exit_code != 0
+
+    @patch("commands.postprocess_shard.load_em_subclassifier")
+    @patch("commands.postprocess_shard.compute_text_stats")
+    def test_resume_skips_processed_books(
+        self, mock_text_stats, mock_load_classifier, tmp_path: Path
+    ):
+        """Test that --resume skips books that were already processed."""
+        mock_classifier = MagicMock()
+        mock_classifier.predict.return_value = []
+        mock_load_classifier.return_value = mock_classifier
+        mock_text_stats.return_value = {"token_count": 50}
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.jsonl"
+        progress_file = tmp_path / "output.progress.jsonl"
+
+        # Create input with 3 books
+        books = [
+            {
+                "barcode_src": f"book{i}",
+                "language_gen": "eng",
+                "frontmatter": [],
+                "middlematter_sentences": ["Content."],
+                "subtopic_paragraph_start_indices": [0],
+                "subtopic_section_start_indices": [0],
+                "backmatter": [],
+            }
+            for i in range(3)
+        ]
+        input_file.write_text("\n".join(json.dumps(b) for b in books))
+
+        # Create progress file with first 2 books already processed
+        progress_records = [
+            {
+                "barcode_src": "book0",
+                "annotated_middlematter": "<idi-section>...",
+                "_postprocessing_complete": True,
+            },
+            {
+                "barcode_src": "book1",
+                "annotated_middlematter": "<idi-section>...",
+                "_postprocessing_complete": True,
+            },
+        ]
+        progress_file.write_text("\n".join(json.dumps(r) for r in progress_records) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            postprocess_main,
+            [
+                "--input-file", str(input_file),
+                "--output-file", str(output_file),
+                "--resume",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        # Output should have all 3 books (2 from progress + 1 new)
+        output_books = [json.loads(line) for line in output_file.read_text().strip().split("\n")]
+        assert len(output_books) == 3
+
+        # Progress file should be cleaned up
+        assert not progress_file.exists()
+
+    @patch("commands.postprocess_shard.load_em_subclassifier")
+    @patch("commands.postprocess_shard.compute_text_stats")
+    def test_resume_does_not_reprocess(
+        self, mock_text_stats, mock_load_classifier, tmp_path: Path
+    ):
+        """Test that --resume does not reprocess already-completed books."""
+        mock_classifier = MagicMock()
+        mock_classifier.predict.return_value = []
+        mock_load_classifier.return_value = mock_classifier
+        mock_text_stats.return_value = {"token_count": 50}
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.jsonl"
+        progress_file = tmp_path / "output.progress.jsonl"
+
+        # Create input with 2 books
+        books = [
+            {
+                "barcode_src": f"book{i}",
+                "language_gen": "eng",
+                "frontmatter": [],
+                "middlematter_sentences": ["Content."],
+                "subtopic_paragraph_start_indices": [0],
+                "subtopic_section_start_indices": [0],
+                "backmatter": [],
+            }
+            for i in range(2)
+        ]
+        input_file.write_text("\n".join(json.dumps(b) for b in books))
+
+        # Create progress file with first book already processed
+        progress_records = [
+            {
+                "barcode_src": "book0",
+                "language_gen": "eng",
+                "annotated_frontmatter": "",
+                "annotated_middlematter": "<idi-section>...",
+                "annotated_backmatter": "",
+                "metadata": {"token_count": 50},
+                "_postprocessing_complete": True,
+            },
+        ]
+        progress_file.write_text("\n".join(json.dumps(r) for r in progress_records) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            postprocess_main,
+            [
+                "--input-file", str(input_file),
+                "--output-file", str(output_file),
+                "--resume",
+            ],
+        )
+
+        assert result.exit_code == 0
+
+        # Output should have 2 books total
+        output_books = [json.loads(line) for line in output_file.read_text().strip().split("\n")]
+        assert len(output_books) == 2
+
+        # First book should have preserved content from progress file
+        book0 = next(b for b in output_books if b["barcode_src"] == "book0")
+        assert book0["annotated_middlematter"] == "<idi-section>..."
+
+        # compute_text_stats should only be called once (for book1, not book0)
+        # because book0 was already processed
+        assert mock_text_stats.call_count == 1
+
+    @patch("commands.postprocess_shard.load_em_subclassifier")
+    @patch("commands.postprocess_shard.compute_text_stats")
+    def test_progress_file_cleaned_up_on_success(
+        self, mock_text_stats, mock_load_classifier, tmp_path: Path
+    ):
+        """Test that progress file is removed after successful completion."""
+        mock_classifier = MagicMock()
+        mock_classifier.predict.return_value = []
+        mock_load_classifier.return_value = mock_classifier
+        mock_text_stats.return_value = {"token_count": 50}
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.jsonl"
+        progress_file = tmp_path / "output.progress.jsonl"
+
+        book = {
+            "barcode_src": "book1",
+            "language_gen": "eng",
+            "frontmatter": [],
+            "middlematter_sentences": ["Content."],
+            "subtopic_paragraph_start_indices": [0],
+            "subtopic_section_start_indices": [0],
+            "backmatter": [],
+        }
+        input_file.write_text(json.dumps(book))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            postprocess_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+        # Progress file should not exist after successful completion
+        assert not progress_file.exists()

@@ -31,6 +31,41 @@ def get_device() -> str:
     return "cpu"
 
 
+def load_processed_book_ids(progress_path: Path) -> set[str]:
+    """Load set of already-processed book IDs from a progress file."""
+    processed = set()
+    if progress_path.exists():
+        with open(progress_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        record = json.loads(line)
+                        book_id = record.get("book_id")
+                        if book_id:
+                            processed.add(book_id)
+                    except json.JSONDecodeError:
+                        continue
+    return processed
+
+
+def finalize_output(progress_path: Path, final_path: Path) -> int:
+    """
+    Finalize output by renaming progress file to final destination.
+
+    Returns the number of records.
+    """
+    if not progress_path.exists():
+        return 0
+
+    # Count lines
+    with open(progress_path, "r", encoding="utf-8") as f:
+        count = sum(1 for line in f if line.strip())
+
+    progress_path.rename(final_path)
+    return count
+
+
 @click.command()
 @click.option(
     "--input-file",
@@ -50,7 +85,18 @@ def get_device() -> str:
     default=None,
     help="Optional config file (YAML)",
 )
-def main(input_file: Path, output_file: Path, config_file: Path | None):
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Resume from previous progress (skip already-processed books)",
+)
+def main(
+    input_file: Path,
+    output_file: Path,
+    config_file: Path | None,
+    resume: bool,
+):
     """
     Compute perplexity for all paragraphs in a shard.
 
@@ -59,6 +105,8 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
 
     The nth perplexity corresponds to the nth paragraph
     (from subtopic_paragraph_start_indices).
+
+    Use --resume to continue from a previous interrupted run.
 
     Example:
         python -m commands.compute_perplexities \\
@@ -69,6 +117,24 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
+    # Progress file path
+    progress_path = output_file.with_suffix(".progress.jsonl")
+
+    # Load previously processed book IDs if resuming
+    processed_book_ids: set[str] = set()
+    if resume:
+        processed_book_ids = load_processed_book_ids(progress_path)
+        if processed_book_ids:
+            logger.info(
+                f"Resuming: found {len(processed_book_ids)} previously processed books"
+            )
+        else:
+            logger.info("Resuming: no previous progress found, starting fresh")
+    else:
+        # Fresh start - remove any existing progress file
+        if progress_path.exists():
+            progress_path.unlink()
+
     device = get_device()
     logger.info(f"Loading perplexity model on {device}...")
     model, tokenizer = load_perplexity_model(config.perplexity.model_name, device)
@@ -77,27 +143,53 @@ def main(input_file: Path, output_file: Path, config_file: Path | None):
     books_skipped = 0
     total_paragraphs = 0
 
-    with open_jsonl(input_file, "r") as f_in, open_jsonl(output_file, "w") as f_out:
-        for line in f_in:
-            book = json.loads(line)
-            book_id = book.get("barcode_src", "")
+    # Open progress file for appending
+    progress_file = open(progress_path, "a", encoding="utf-8")
 
-            try:
-                result = compute_perplexities_in_book(book, model, tokenizer, device)
-                record = {
-                    "book_id": result["book_id"],
-                    "perplexities": result["perplexities"],
-                }
-                f_out.write(json.dumps(record) + "\n")
-                books_processed += 1
-                total_paragraphs += len(result["perplexities"])
-            except ValueError as e:
-                logger.warning(f"Skipping {book_id}: {e}")
-                books_skipped += 1
+    try:
+        with open_jsonl(input_file, "r") as f_in:
+            for line in f_in:
+                book = json.loads(line)
+                book_id = book.get("barcode_src", "")
+
+                # Skip if already processed
+                if book_id in processed_book_ids:
+                    books_skipped += 1
+                    continue
+
+                try:
+                    result = compute_perplexities_in_book(book, model, tokenizer, device)
+                    record = {
+                        "book_id": result["book_id"],
+                        "perplexities": result["perplexities"],
+                    }
+                    progress_file.write(json.dumps(record) + "\n")
+                    progress_file.flush()
+                    books_processed += 1
+                    total_paragraphs += len(result["perplexities"])
+                except ValueError as e:
+                    logger.warning(f"Skipping {book_id}: {e}")
+                    books_skipped += 1
+
+    finally:
+        progress_file.close()
+
+    if resume and books_skipped > 0:
+        # Distinguish between skipped due to resume vs skipped due to errors
+        resumed_count = len(processed_book_ids)
+        error_skipped = books_skipped - resumed_count
+        if resumed_count > 0:
+            logger.info(f"Skipped {resumed_count} previously processed books")
+        if error_skipped > 0:
+            logger.info(f"Skipped {error_skipped} books due to errors")
+
+    # Finalize output: move progress file to final destination
+    total_books = finalize_output(progress_path, output_file)
 
     logger.info(
-        f"Processed {books_processed} books, skipped {books_skipped}, "
-        + f"computed {total_paragraphs} perplexities to {output_file}"
+        f"Processed {books_processed} books this run, "
+        f"{total_books} total books, "
+        f"computed {total_paragraphs} perplexities to {output_file}"
     )
 
 

@@ -232,3 +232,100 @@ class TestComputePerplexitiesCLI:
             mock_load_model.assert_called_once()
             call_args = mock_load_model.call_args
             assert call_args[0][0] == "custom/model-name"
+
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    def test_resume_skips_processed_books(
+        self, mock_compute, mock_load_model, tmp_path: Path
+    ):
+        """Test that --resume skips books that were already processed."""
+        mock_model = MagicMock()
+        mock_tokenizer = MagicMock()
+        mock_load_model.return_value = (mock_model, mock_tokenizer)
+        # Only called for book2 (book1 already processed)
+        mock_compute.return_value = {"book_id": "book2", "perplexities": [20.0]}
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.perplexity.jsonl"
+        progress_file = tmp_path / "output.perplexity.progress.jsonl"
+
+        # Create input with 2 books
+        books = [
+            {
+                "barcode_src": "book1",
+                "middlematter_sentences": ["A."],
+                "subtopic_paragraph_start_indices": [0],
+            },
+            {
+                "barcode_src": "book2",
+                "middlematter_sentences": ["B."],
+                "subtopic_paragraph_start_indices": [0],
+            },
+        ]
+        input_file.write_text("\n".join(json.dumps(b) for b in books))
+
+        # Create progress file with first book already processed
+        progress_records = [{"book_id": "book1", "perplexities": [10.0]}]
+        progress_file.write_text("\n".join(json.dumps(r) for r in progress_records) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            compute_perplexities_main,
+            [
+                "--input-file", str(input_file),
+                "--output-file", str(output_file),
+                "--resume",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        # Output should have both books (1 from progress + 1 new)
+        output_records = [
+            json.loads(line) for line in output_file.read_text().strip().split("\n")
+        ]
+        assert len(output_records) == 2
+
+        # Verify both books are present
+        book_ids = {r["book_id"] for r in output_records}
+        assert book_ids == {"book1", "book2"}
+
+        # Progress file should be cleaned up
+        assert not progress_file.exists()
+
+        # compute should only have been called once (for book2)
+        assert mock_compute.call_count == 1
+
+    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    def test_progress_file_cleaned_up_on_success(
+        self, mock_compute, mock_load_model, tmp_path: Path
+    ):
+        """Test that progress file is removed after successful completion."""
+        mock_model = MagicMock()
+        mock_tokenizer = MagicMock()
+        mock_load_model.return_value = (mock_model, mock_tokenizer)
+        mock_compute.return_value = {"book_id": "book1", "perplexities": [10.0]}
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.perplexity.jsonl"
+        progress_file = tmp_path / "output.perplexity.progress.jsonl"
+
+        book = {
+            "barcode_src": "book1",
+            "middlematter_sentences": ["Test."],
+            "subtopic_paragraph_start_indices": [0],
+        }
+        input_file.write_text(json.dumps(book))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            compute_perplexities_main,
+            ["--input-file", str(input_file), "--output-file", str(output_file)],
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+        # Progress file should not exist after successful completion
+        assert not progress_file.exists()

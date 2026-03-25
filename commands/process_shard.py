@@ -4,6 +4,7 @@ process_shard.py - main shard processing orchestrator
 Handles steps 1-10.
 """
 
+import gzip
 import importlib
 import json
 import traceback
@@ -22,7 +23,6 @@ from const.types import (
     ProcessStats,
     StepFunction,
 )
-from utils.atomic_write import atomic_jsonl_writer
 from utils.jsonl_io import open_jsonl
 
 
@@ -80,6 +80,59 @@ def process_book_through_steps(
     return current_book, last_completed_step, None
 
 
+def load_processed_barcodes(progress_path: Path) -> set[str]:
+    """Load set of already-processed barcodes from a progress file."""
+    processed = set()
+    if progress_path.exists():
+        with open(progress_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        record = json.loads(line)
+                        barcode = record.get("barcode_src")
+                        if barcode:
+                            processed.add(barcode)
+                    except json.JSONDecodeError:
+                        continue
+    return processed
+
+
+def finalize_output(
+    progress_path: Path,
+    final_path: Path,
+    compress: bool,
+) -> int:
+    """
+    Finalize output by moving progress file to final destination.
+
+    If compress=True, reads progress and writes compressed.
+    Otherwise, renames progress to final.
+
+    Returns the number of records.
+    """
+    if not progress_path.exists():
+        return 0
+
+    count = 0
+    if compress:
+        with (
+            open(progress_path, "r", encoding="utf-8") as f_in,
+            gzip.open(final_path, "wt", encoding="utf-8") as f_out,
+        ):
+            for line in f_in:
+                f_out.write(line)
+                count += 1
+        progress_path.unlink()
+    else:
+        # Count lines before rename
+        with open(progress_path, "r", encoding="utf-8") as f:
+            count = sum(1 for line in f if line.strip())
+        progress_path.rename(final_path)
+
+    return count
+
+
 def process_shard(
     input_file: Path,
     output_dir: Path,
@@ -88,6 +141,7 @@ def process_shard(
     config: PipelineConfig,
     start_step: str | None = None,
     end_step: str | None = None,
+    resume: bool = False,
 ) -> ProcessStats:
     """
     Process all books in a shard through the pipeline steps.
@@ -100,6 +154,7 @@ def process_shard(
         config: Pipeline configuration
         start_step: First step to run (default: first in MAIN_STEPS)
         end_step: Last step to run (default: last in MAIN_STEPS)
+        resume: If True, resume from previous progress
 
     Returns:
         Statistics dict with counts
@@ -109,54 +164,107 @@ def process_shard(
     logger.info(f"Running steps: {steps[0]} -> {steps[-1]} on shard {shard_id}.")
 
     # Set up output paths
-    if config.use_gzip:
+    use_gzip = config.use_gzip
+    if use_gzip:
         complete_path = output_dir / f"shard{shard_id}.complete.jsonl.gz"
     else:
         complete_path = output_dir / f"shard{shard_id}.complete.jsonl"
     incomplete_path = output_dir / f"shard{shard_id}.incomplete.jsonl"
 
-    # Stream writes - only one book in memory at a time
-    with (
-        atomic_jsonl_writer(complete_path) as complete_writer,
-        atomic_jsonl_writer(incomplete_path, compress=False) as incomplete_writer,
-        open_jsonl(input_file, "r") as f,
-    ):
-        for line_num, line in enumerate(f, 1):
-            try:
-                book = json.loads(line)
-            except json.JSONDecodeError as e:
-                logger.error(f"Line {line_num}: Invalid JSON: {e}")
-                continue
+    # Progress file paths (always uncompressed for append efficiency)
+    complete_progress = output_dir / f"shard{shard_id}.complete.progress.jsonl"
+    incomplete_progress = output_dir / f"shard{shard_id}.incomplete.progress.jsonl"
 
-            book_id = book.get("barcode_src", f"shard_{shard_id}_line_{line_num}")
-            logger.info(f"Processing book {book_id}  (book #{line_num} in shard)")
-
-            result_book, last_step, error_msg = process_book_through_steps(
-                book, config, segmenter, steps
+    # Load previously processed barcodes if resuming
+    processed_barcodes: set[str] = set()
+    if resume:
+        processed_barcodes = load_processed_barcodes(complete_progress)
+        processed_barcodes |= load_processed_barcodes(incomplete_progress)
+        if processed_barcodes:
+            logger.info(
+                f"Resuming: found {len(processed_barcodes)} previously processed books"
             )
+        else:
+            logger.info("Resuming: no previous progress found, starting fresh")
+    else:
+        # Fresh start - remove any existing progress files
+        if complete_progress.exists():
+            complete_progress.unlink()
+        if incomplete_progress.exists():
+            incomplete_progress.unlink()
 
-            if error_msg is None:
-                result_book["_processing_complete"] = True
-                result_book["_last_completed_step"] = last_step
-                result_book["_processed_at"] = datetime.now(UTC).isoformat()
-                complete_writer.write_record(result_book)
-                logger.info(f"Book {book_id} completed successfully")
-            else:
-                result_book["_processing_complete"] = False
-                result_book["_last_completed_step"] = last_step
-                result_book["_error_message"] = error_msg
-                result_book["_processed_at"] = datetime.now(UTC).isoformat()
-                incomplete_writer.write_record(result_book)
-                logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
+    # Open progress files for appending
+    complete_file = open(complete_progress, "a", encoding="utf-8")
+    incomplete_file = open(incomplete_progress, "a", encoding="utf-8")
 
-    complete_count = complete_writer.count
-    incomplete_count = incomplete_writer.count
-    logger.info(f"Complete books: {complete_count}, Incomplete: {incomplete_count}")
+    complete_count = 0
+    incomplete_count = 0
+    skipped_count = 0
+
+    try:
+        with open_jsonl(input_file, "r") as f:
+            for line_num, line in enumerate(f, 1):
+                try:
+                    book = json.loads(line)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Line {line_num}: Invalid JSON: {e}")
+                    continue
+
+                book_id = book.get("barcode_src", f"shard_{shard_id}_line_{line_num}")
+
+                # Skip if already processed
+                if book_id in processed_barcodes:
+                    skipped_count += 1
+                    continue
+
+                logger.info(f"Processing book {book_id}  (book #{line_num} in shard)")
+
+                result_book, last_step, error_msg = process_book_through_steps(
+                    book, config, segmenter, steps
+                )
+
+                if error_msg is None:
+                    result_book["_processing_complete"] = True
+                    result_book["_last_completed_step"] = last_step
+                    result_book["_processed_at"] = datetime.now(UTC).isoformat()
+                    complete_file.write(json.dumps(result_book, ensure_ascii=False))
+                    complete_file.write("\n")
+                    complete_file.flush()
+                    complete_count += 1
+                    logger.info(f"Book {book_id} completed successfully")
+                else:
+                    result_book["_processing_complete"] = False
+                    result_book["_last_completed_step"] = last_step
+                    result_book["_error_message"] = error_msg
+                    result_book["_processed_at"] = datetime.now(UTC).isoformat()
+                    incomplete_file.write(json.dumps(result_book, ensure_ascii=False))
+                    incomplete_file.write("\n")
+                    incomplete_file.flush()
+                    incomplete_count += 1
+                    logger.warning(f"Book {book_id} marked incomplete: {error_msg}")
+
+    finally:
+        complete_file.close()
+        incomplete_file.close()
+
+    # Account for previously processed books in totals
+    if resume and skipped_count > 0:
+        logger.info(f"Skipped {skipped_count} previously processed books")
+
+    # Finalize outputs: move progress files to final destinations
+    prev_complete = len(load_processed_barcodes(complete_progress)) if resume else 0
+    prev_incomplete = len(load_processed_barcodes(incomplete_progress)) if resume else 0
+
+    # For totals, we need to count what's actually in the progress files
+    total_complete = finalize_output(complete_progress, complete_path, use_gzip)
+    total_incomplete = finalize_output(incomplete_progress, incomplete_path, False)
+
+    logger.info(f"Complete books: {total_complete}, Incomplete: {total_incomplete}")
 
     return {
-        "total": complete_count + incomplete_count,
-        "complete": complete_count,
-        "incomplete": incomplete_count,
+        "total": total_complete + total_incomplete,
+        "complete": total_complete,
+        "incomplete": total_incomplete,
     }
 
 
@@ -206,6 +314,12 @@ def process_shard(
     default=None,
     help="Last step to run (default: last of main steps)",
 )
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Resume from previous progress (skip already-processed books)",
+)
 def main(
     shard_id: str,
     input_dir: Path,
@@ -215,12 +329,15 @@ def main(
     config_file: Path | None,
     start_step: str | None,
     end_step: str | None,
+    resume: bool,
 ):
     """
     Process a shard through the main pipeline (steps 1-10).
 
     Reads books from input shard, processes each through the configured
     steps, and writes results to complete/incomplete output files.
+
+    Use --resume to continue from a previous interrupted run.
     """
     # Try gzipped first, then fall back to uncompressed
     input_file = input_dir / f"shard{shard_id}_{segmenter}.jsonl.gz"
@@ -244,6 +361,8 @@ def main(
     logger.info(f"Input: {input_file}")
     logger.info(f"Output: {output_dir}")
     logger.info(f"Segmenter: {segmenter}")
+    if resume:
+        logger.info("Resume mode enabled")
 
     stats = process_shard(
         input_file=input_file,
@@ -253,6 +372,7 @@ def main(
         config=config,
         start_step=start_step,
         end_step=end_step,
+        resume=resume,
     )
 
     # Info
