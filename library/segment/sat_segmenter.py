@@ -73,8 +73,8 @@ def load_sat_model(model_name: str = "sat-3l-sm") -> SaT:
     """Load the SaT model for segmentation."""
     device = get_device()
     if device == "cpu":
-        raise RuntimeError(
-            "No GPU available for SaT segmentation. Please run on a machine with a GPU."
+        logger.warning(
+            "No GPU available for SaT segmentation. CAUTION you probably want to run this on a machine with a GPU."
         )
     logger.info(f"Loading SAT model {model_name} on {device}.")
     sat = SaT(model_name)
