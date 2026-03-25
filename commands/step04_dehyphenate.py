@@ -40,6 +40,9 @@ def process_book(
         Processed book dictionary with dehyphenated middlematter
     """
     lang = book.get("language_gen", "")
+    if not lang:
+        # default to English, the most common --- and perform dehyphenation
+        lang = "eng"
     cache = _get_single_lang_cache(lang)
     return dehyphenate_book(book, config=config, lm_cache=cache)
 

@@ -18,6 +18,7 @@ import torch
 from loguru import logger
 from tqdm import tqdm
 
+from const.config import PipelineConfig, load_config
 from const.languages import is_nupunkt_language
 from const.types import BookJSON, BooksByLangDict, NormPage, NormText, RawPage
 from library.denoise.ngrams import build_ngram_stats, save_ngram_stats
@@ -500,7 +501,13 @@ def setup_pipeline(
     "--m2v-training-data-dir",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help="Directory containing m2v training data (default: DATA/release_assets/m2v_training_data)",
+    help="Directory containing m2v training data (default from config)",
+)
+@click.option(
+    "--config-file",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Optional config file (YAML)",
 )
 def main(
     shard_dir: Path,
@@ -512,6 +519,7 @@ def main(
     model_dim: int,
     overwrite: bool,
     m2v_training_data_dir: Path | None,
+    config_file: Path | None,
 ):
     """
     Train language models from prepared shards.
@@ -525,6 +533,11 @@ def main(
             --shard-dir ./DATA/shards/raw \\
             --output-dir ./DATA/models
     """
+    config = load_config(config_file) if config_file else PipelineConfig()
+
+    # Use CLI arg if provided, otherwise fall back to config
+    training_data_dir = m2v_training_data_dir or config.model_paths.m2v_training_data_dir
+
     click.echo(f"Setting up pipeline from: {shard_dir}")
     click.echo(f"Output directory: {output_dir}")
     click.echo(f"Max books per language: {max_books}")
@@ -538,7 +551,7 @@ def main(
         model_name=model_name,
         model_dim=model_dim,
         overwrite=overwrite,
-        m2v_training_data_dir=m2v_training_data_dir,
+        m2v_training_data_dir=training_data_dir,
     )
 
 

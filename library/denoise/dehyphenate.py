@@ -66,7 +66,8 @@ def dehyphenate_book(
 
     lang = book.get("language_gen")
     if not lang:
-        raise ValueError(f"No 'language_gen' found in book {book_id}")
+        logger.info(f"No 'language_gen' found in book {book_id}")
+        lang = "unknown"
 
     if lm_cache is None:
         lm_cache = {}

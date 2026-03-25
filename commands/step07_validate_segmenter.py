@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+from loguru import logger
 
 from const.config import PipelineConfig, load_config
 from const.languages import is_nupunkt_language
@@ -34,7 +35,8 @@ def validate_segmenter_for_book(
     lang = book.get("language_gen")
     if not lang:
         book_id = book.get("barcode_src", book.get("book_id", "unknown"))
-        raise ValueError(f"No 'language_gen' found in book {book_id}")
+        lang = "unknown"
+        logger.info(f"No 'language_gen' found in book {book_id}")
 
     if segmenter not in ("nupunkt", "sat"):
         raise ValueError(f"Invalid segmenter: {segmenter}. Must be 'nupunkt' or 'sat'.")

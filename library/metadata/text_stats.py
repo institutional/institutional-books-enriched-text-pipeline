@@ -118,7 +118,7 @@ def compute_text_stats(book: BookJSON) -> TextStats:
     sentences = book.get("middlematter_sentences", [])
     para_starts = book.get("subtopic_paragraph_start_indices", [])
     section_starts = book.get("subtopic_section_start_indices", [])
-    language = book.get("language_gen", "en")
+    language = book.get("language_gen", "unknown")
 
     # Join all sentences into text
     text = " ".join(sentences)

@@ -32,10 +32,15 @@ model_paths:
   embedding: ./DATA/pretrain/models/BAAI_bge-m3_m2v_512dim
   mmem_classifier: ./DATA/pretrain/models/mmem_classifier
   em_subclassifier: ./DATA/pretrain/models/em_subclassifier
+  m2v_training_data_dir: ./DATA/release_assets/m2v_training_data
 
 # Chunking algorithm: "texttiling" or "c99"
 chunking:
   algorithm: texttiling
+
+# Sentence segmentation
+segment:
+  sat_model_name: sat-3l-sm
 
 # Perplexity computation (GPU recommended)
 perplexity:
@@ -45,6 +50,8 @@ perplexity:
 # Compress output shard files with gzip
 use_gzip: false
 ```
+
+All options shown above are defaults and can be omitted if unchanged.
 
 
 ## About IDI ##

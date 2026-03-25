@@ -166,13 +166,6 @@ class TestDehyphenateBook:
         assert result is book
         assert result["middlematter"] == ["normal text"]
 
-    def test_missing_language_raises(self):
-        """Test that missing language raises ValueError when hyphens present."""
-        book = {"middlematter": ["text with-\nhyphen"], "barcode_src": "123"}
-
-        with pytest.raises(ValueError, match="No 'language_gen'"):
-            dehyphenate_book(book)
-
     def test_preserves_other_fields(self):
         """Test that other book fields are preserved."""
         book = {
