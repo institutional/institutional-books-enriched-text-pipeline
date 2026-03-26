@@ -93,6 +93,7 @@ def load_ngram_scorer(lang: str, model_dir: Path, cache: dict[str, NGramScorer])
         )
         logger.warning("Defaulting to English for dehyphenation")
         stats_path = model_dir / "eng_ngram.json.gz"
+        lang = "eng"
     stats = load_ngram_stats(stats_path)
     cache[lang] = NGramScorer(stats)
     return cache[lang]
