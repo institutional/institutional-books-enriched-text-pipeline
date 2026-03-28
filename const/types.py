@@ -2,7 +2,7 @@
 types.py - user types
 """
 
-from typing import Any, Callable, NewType, TypedDict
+from typing import Any, Callable, NewType, NotRequired, TypedDict
 
 from const.config import PipelineConfig
 
@@ -52,6 +52,7 @@ class ProcessStats(TypedDict):
     total: int
     complete: int
     incomplete: int
+    already_complete: NotRequired[int]
 
 
 class BookSimhashes(TypedDict):

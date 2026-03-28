@@ -72,3 +72,41 @@ def get_step_range(
         end_idx = step_list.index(end_step) + 1  # remember to be inclusive!
 
     return step_list[start_idx:end_idx]
+
+
+def get_remaining_steps(
+    last_completed_step: str,
+    end_step: Optional[str] = None,
+    step_list: list[str] = MAIN_STEPS,
+) -> list[str]:
+    """
+    Get the remaining steps after a given completed step.
+
+    Args:
+        last_completed_step: The last step that completed successfully
+        end_step: Optional final step (inclusive)
+        step_list: List of steps to use
+
+    Returns:
+        List of step names to run (starting from the step AFTER last_completed_step)
+    """
+    if last_completed_step == "step0_prestart":
+        # Nothing completed yet, run all steps
+        start_idx = 0
+    elif last_completed_step not in step_list:
+        raise ValueError(f"Unknown step: {last_completed_step}. Valid steps: {step_list}")
+    else:
+        start_idx = step_list.index(last_completed_step) + 1
+
+    if start_idx >= len(step_list):
+        # All steps already completed
+        return []
+
+    if end_step is None:
+        end_idx = len(step_list)
+    else:
+        if end_step not in step_list:
+            raise ValueError(f"End step '{end_step}' not in step list")
+        end_idx = step_list.index(end_step) + 1
+
+    return step_list[start_idx:end_idx]
