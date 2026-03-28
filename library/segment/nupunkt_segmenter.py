@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import cast
 
 import nupunkt
+from loguru import logger
 from nupunkt import PunktSentenceTokenizer
 from nupunkt.training import train_model
 
@@ -48,11 +49,19 @@ def segment_book_nupunkt(
 
     combined_middlematter = cast(NormText, combined_middlematter)
     if adapt_model:
-        tokenizer = adapt_model_to_book_inmemory(
-            base_model_path=model_file,
-            corpus=combined_middlematter,
-        )
-        segments = tokenizer.tokenize(combined_middlematter)
+        try:
+            tokenizer = adapt_model_to_book_inmemory(
+                base_model_path=model_file,
+                corpus=combined_middlematter,
+            )
+            segments = tokenizer.tokenize(combined_middlematter)
+        except ValueError as e:
+            if "math domain error" in str(e):
+                book_id = book.get("barcode_src", book.get("book_id", "unknown"))
+                logger.warning(f"Nupunkt adaptation failed for {book_id}, using base model")
+                segments = segment_text_with_nupunkt(model_path=model_file, text=combined_middlematter)
+            else:
+                raise
     else:
         # Use base model directly
         segments = segment_text_with_nupunkt(model_path=model_file, text=combined_middlematter)
