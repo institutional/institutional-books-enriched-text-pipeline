@@ -170,6 +170,10 @@ def main(
                 except ValueError as e:
                     logger.warning(f"Skipping {book_id}: {e}")
                     books_skipped += 1
+                except torch.OutOfMemoryError:
+                    logger.warning(f"Skipping {book_id}: out of memory")
+                    books_skipped += 1
+                    torch.cuda.empty_cache()
 
     finally:
         progress_file.close()

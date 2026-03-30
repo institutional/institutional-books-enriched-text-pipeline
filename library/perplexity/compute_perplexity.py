@@ -42,16 +42,17 @@ def compute_perplexity(
     if len(text) < 5:
         return -1.0
 
+    # Check if truncation will occur
+    token_count = len(tokenizer.encode(text, add_special_tokens=True))
+    if token_count > max_length:
+        logger.warning(f"Truncation occurred: {token_count} tokens exceeds max_length {max_length}")
+
     inputs = tokenizer(
         text,
         return_tensors="pt",
         truncation=True,
         max_length=max_length,
-        return_overflowing_tokens=True,
     )
-    if inputs.get("overflowing_tokens") is not None and len(inputs["overflowing_tokens"]) > 0:
-        logger.warning("Truncation occurred!")
-        inputs.pop("overflowing_tokens")
 
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
