@@ -14,6 +14,7 @@ Algorithm:
 4. Identify valleys in similarity scores to determine chunk boundaries
 """
 
+import bisect
 from pathlib import Path
 
 import numpy as np
@@ -190,25 +191,32 @@ def smooth_scores(
 def compute_depths(smoothed_scores: np.ndarray) -> np.ndarray:
     """Compute TextTiling-style valley depth for each gap."""
     M = smoothed_scores.size
-    depths = np.zeros(M, dtype=np.float32)
+    if M == 0:
+        return np.zeros(0, dtype=np.float32)
 
-    for i in range(M):
-        # Find left peak
-        left = i
-        while left > 0 and smoothed_scores[left - 1] >= smoothed_scores[left]:
-            left -= 1
+    # The following is a O(N) implementation to identify peaks. It's very
+    # leetcode-like and a classic mountain-valley problem.
 
-        # Find right peak
-        right = i
-        while right < M - 1 and smoothed_scores[right + 1] >= smoothed_scores[right]:
-            right += 1
+    # Left to right pass
+    left_extent = np.zeros(M, dtype=np.intp)
+    for i in range(1, M):
+        if smoothed_scores[i - 1] < smoothed_scores[i]:
+            left_extent[i] = i
+        else:
+            left_extent[i] = left_extent[i - 1]
 
-        depth = (smoothed_scores[left] - smoothed_scores[i]) + (
-            smoothed_scores[right] - smoothed_scores[i]
-        )
-        depths[i] = max(0.0, depth)
+    # Right to left pass
+    right_extent = np.arange(M, dtype=np.intp)
+    for i in range(M - 2, -1, -1):
+        if smoothed_scores[i + 1] >= smoothed_scores[i]:
+            right_extent[i] = right_extent[i + 1]
 
-    return depths
+    # Compute depths vectorized
+    left_peaks = smoothed_scores[left_extent]
+    right_peaks = smoothed_scores[right_extent]
+    depths = (left_peaks - smoothed_scores) + (right_peaks - smoothed_scores)
+
+    return np.maximum(depths, 0.0).astype(np.float32)
 
 
 def choose_boundaries(
@@ -231,14 +239,21 @@ def choose_boundaries(
     # Sort by depth descending, enforce min_gap
     candidate_idxs.sort(key=lambda i: depths[i], reverse=True)
 
+    # Keep chosen sorted for bisection-based neighbor lookup
     chosen: list[int] = []
     for idx in candidate_idxs:
         if not chosen:
             chosen.append(idx)
             continue
 
-        if min(abs(idx - c) for c in chosen) >= min_gap:
-            chosen.append(idx)
+        pos = bisect.bisect_left(chosen, idx)
+        # Check distance to left neighbor (if exists)
+        if pos > 0 and idx - chosen[pos - 1] < min_gap:
+            continue
+        # Check distance to right neighbor (if exists)
+        if pos < len(chosen) and chosen[pos] - idx < min_gap:
+            continue
+        # If far enough from neighbors, insert in sorted position
+        bisect.insort_left(chosen, idx)
 
-    chosen.sort()
     return chosen
