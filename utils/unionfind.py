@@ -81,7 +81,8 @@ class UnionFindInt:
         # Use signed long long (8 bytes each) - 'q' typecode
         # parent[i] = i initially (each element is its own root)
         self.parent = array.array("q", range(n))
-        self.rank = array.array("q", [0] * n)
+        # We use unsigned int 'I' for ranks
+        self.rank = array.array("I", bytes(n))
         self.n = n
 
     def find(self, x: int) -> int:
@@ -96,13 +97,13 @@ class UnionFindInt:
             x = next_x
         return root
 
-    def union(self, x: int, y: int) -> None:
-        """Union the sets containing x and y."""
+    def union(self, x: int, y: int) -> bool:
+        """Union the sets containing x and y. Returns True if a merge occurred."""
         root_x = self.find(x)
         root_y = self.find(y)
 
         if root_x == root_y:
-            return
+            return False
 
         # Union by rank
         if self.rank[root_x] < self.rank[root_y]:
@@ -112,6 +113,7 @@ class UnionFindInt:
         else:
             self.parent[root_y] = root_x
             self.rank[root_x] += 1
+        return True
 
     def get_clusters(self) -> dict[int, list[int]]:
         """Get the clusters as a dict of root -> list of items."""
