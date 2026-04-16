@@ -20,8 +20,8 @@ namespace idi_simhash {
    int hamming_distance(uint64_t h1_lo, uint64_t h1_hi, uint64_t h2_lo, uint64_t h2_hi);
    bool are_near_duplicates(uint64_t h1_lo, uint64_t h1_hi, uint64_t h2_lo, uint64_t h2_hi, int threshold);
    std::vector<uint32_t> extract_bands(uint64_t hash_lo, uint64_t hash_hi);
-   std::vector<std::pair<int, int>> process_bucket(const std::vector<int>& doc_indices, const uint64_t* hashes, int threshold, int max_bucket_size);
-   std::vector<std::pair<int, int>> process_bucket_batch(const std::vector<std::vector<int>>& buckets, const uint64_t* hashes, int threshold, int max_bucket_size);
+   std::vector<std::pair<int64_t, int64_t>> process_bucket(const std::vector<int64_t>& doc_indices, const uint64_t* hashes, int threshold, int max_bucket_size);
+   std::vector<std::pair<int64_t, int64_t>> process_bucket_batch(const std::vector<std::vector<int64_t>>& buckets, const uint64_t* hashes, int threshold, int max_bucket_size);
 }
 
 /**
@@ -93,7 +93,7 @@ std::vector<uint32_t> py_extract_bands(py::object hash_value) {
  * The buffer should be an array of uint64_t values (2 per document: lo, hi).
  */
 py::list py_process_bucket(
-    const std::vector<int>& doc_indices,
+    const std::vector<int64_t>& doc_indices,
     py::buffer hashes_buffer,
     int threshold,
     int max_bucket_size
@@ -118,7 +118,7 @@ py::list py_process_bucket(
  * Process a batch of buckets using a buffer of hashes.
  */
 py::list py_process_bucket_batch(
-    const std::vector<std::vector<int>>& buckets,
+    const std::vector<std::vector<int64_t>>& buckets,
     py::buffer hashes_buffer,
     int threshold,
     int max_bucket_size

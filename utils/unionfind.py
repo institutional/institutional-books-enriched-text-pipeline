@@ -81,8 +81,8 @@ class UnionFindInt:
         # Use signed long long (8 bytes each) - 'q' typecode
         # parent[i] = i initially (each element is its own root)
         self.parent = array.array("q", range(n))
-        # We use unsigned int 'I' for ranks
-        self.rank = array.array("I", bytes(n))
+        # Rank never exceeds log2(n) ~= 31 for billions of elements
+        self.rank = array.array("B", bytes(n))
         self.n = n
 
     def find(self, x: int) -> int:
