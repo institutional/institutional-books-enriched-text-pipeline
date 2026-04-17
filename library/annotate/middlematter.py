@@ -13,7 +13,6 @@ from library.annotate.language import detect_paragraph_languages
 from library.annotate.tags import (
     build_duplicate_tag,
     build_paragraph_tag,
-    build_representative_tag,
     build_section_tag,
 )
 
@@ -129,15 +128,16 @@ def annotate_middlematter(
             str_idx = str(para_idx)
 
             if str_idx in representative_paras:
-                # Representative paragraph - NOT merged with others
+                # Representative paragraph — cluster info goes on the <p> tag
                 para_lang = languages[para_idx] if para_idx < len(languages) else None
+                cluster = f"{book_id}:{para_idx}"
                 para_tag = build_paragraph_tag(
                     para_text,
                     para_perp if para_perp and para_perp > 0 else None,
                     para_lang,
+                    representative_cluster=cluster,
                 )
-                cluster = f"{book_id}:p:{para_idx}"
-                section_content.append(build_representative_tag(para_tag, cluster))
+                section_content.append(para_tag)
                 para_idx += 1
 
             elif str_idx in duplicate_paras:
@@ -146,12 +146,12 @@ def annotate_middlematter(
                 dup_paras_tags = []
                 start_dup = para_idx
                 first_ref = duplicate_paras[str_idx]
-                first_ref_book, first_ref_para = first_ref.rsplit(":p:", 1)
+                first_ref_book, first_ref_para = first_ref.rsplit(":", 1)
                 ref_para = int(first_ref_para)
 
                 while para_idx < end_para and str(para_idx) in duplicate_paras:
                     ref = duplicate_paras[str(para_idx)]
-                    ref_book, ref_p = ref.rsplit(":p:", 1)
+                    ref_book, ref_p = ref.rsplit(":", 1)
                     expected_para = ref_para + (para_idx - start_dup)
 
                     if ref_book != first_ref_book or int(ref_p) != expected_para:
@@ -175,9 +175,9 @@ def annotate_middlematter(
                 # Build cluster reference to the representative's paragraph range
                 last_ref_para = ref_para + len(dup_paras_tags) - 1
                 if ref_para == last_ref_para:
-                    cluster = f"{first_ref_book}:p:{ref_para}"
+                    cluster = f"{first_ref_book}:{ref_para}"
                 else:
-                    cluster = f"{first_ref_book}:p:{ref_para}-{last_ref_para}"
+                    cluster = f"{first_ref_book}:{ref_para}-{last_ref_para}"
 
                 dup_content = "\n".join(dup_paras_tags)
                 section_content.append(build_duplicate_tag(dup_content, cluster))

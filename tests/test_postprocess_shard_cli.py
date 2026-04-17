@@ -157,7 +157,7 @@ class TestPostprocessShardCLI:
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     def test_annotation_produces_tags(self, mock_load_classifier, tmp_path: Path):
-        """Test that annotation produces proper XML-like tags."""
+        """Test that annotation produces proper HTML tags."""
         mock_classifier = MagicMock()
         mock_classifier.predict.return_value = ["TOC_INDEX"]
         mock_load_classifier.return_value = mock_classifier
@@ -185,11 +185,12 @@ class TestPostprocessShardCLI:
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        # Check frontmatter has endmatter tags (now a single string)
-        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"]
+        # Check frontmatter has header and div tags
+        assert "<header>" in output_book["annotated_frontmatter"]
+        assert '<div class="toc_index">' in output_book["annotated_frontmatter"]
         # Check middlematter has section/paragraph tags
-        assert "<idi-section>" in output_book["annotated_middlematter"]
-        assert "<idi-paragraph" in output_book["annotated_middlematter"]
+        assert "<section>" in output_book["annotated_middlematter"]
+        assert "<p" in output_book["annotated_middlematter"]
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     @patch("commands.postprocess_shard.compute_text_stats")
@@ -275,12 +276,12 @@ class TestPostprocessShardCLI:
         progress_records = [
             {
                 "barcode_src": "book0",
-                "annotated_middlematter": "<idi-section>...",
+                "annotated_middlematter": "<section>...",
                 "_postprocessing_complete": True,
             },
             {
                 "barcode_src": "book1",
-                "annotated_middlematter": "<idi-section>...",
+                "annotated_middlematter": "<section>...",
                 "_postprocessing_complete": True,
             },
         ]
@@ -342,7 +343,7 @@ class TestPostprocessShardCLI:
                 "barcode_src": "book0",
                 "language_gen": "eng",
                 "annotated_frontmatter": "",
-                "annotated_middlematter": "<idi-section>...",
+                "annotated_middlematter": "<section>...",
                 "annotated_backmatter": "",
                 "metadata": {"token_count": 50},
                 "_postprocessing_complete": True,
@@ -368,7 +369,7 @@ class TestPostprocessShardCLI:
 
         # First book should have preserved content from progress file
         book0 = next(b for b in output_books if b["barcode_src"] == "book0")
-        assert book0["annotated_middlematter"] == "<idi-section>..."
+        assert book0["annotated_middlematter"] == "<section>..."
 
         # compute_text_stats should only be called once (for book1, not book0)
         # because book0 was already processed

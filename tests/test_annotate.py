@@ -13,101 +13,99 @@ from library.annotate.middlematter import (
 )
 from library.annotate.tags import (
     build_duplicate_tag,
-    build_endmatter_tag,
+    build_endmatter_page_tag,
     build_paragraph_tag,
-    build_representative_tag,
     build_section_tag,
-    escape_xml,
+    escape_html,
 )
 
 
-class TestEscapeXml:
+class TestEscapeHtml:
     def test_escapes_ampersand(self):
-        assert escape_xml("Tom & Jerry") == "Tom &amp; Jerry"
+        assert escape_html("Tom & Jerry") == "Tom &amp; Jerry"
 
     def test_escapes_less_than(self):
-        assert escape_xml("a < b") == "a &lt; b"
+        assert escape_html("a < b") == "a &lt; b"
 
     def test_escapes_greater_than(self):
-        assert escape_xml("a > b") == "a &gt; b"
+        assert escape_html("a > b") == "a &gt; b"
 
     def test_preserves_normal_text(self):
-        assert escape_xml("Hello World") == "Hello World"
+        assert escape_html("Hello World") == "Hello World"
 
     def test_handles_empty_string(self):
-        assert escape_xml("") == ""
+        assert escape_html("") == ""
 
 
-class TestBuildEndmatterTag:
+class TestBuildEndmatterPageTag:
     def test_toc_index_tag(self):
-        result = build_endmatter_tag("Table of Contents", "TOC_INDEX")
-        assert result == '<idi-endmatter type="TOC_INDEX">Table of Contents</idi-endmatter>'
+        result = build_endmatter_page_tag("Table of Contents", "TOC_INDEX")
+        assert result == '<div class="toc_index">Table of Contents</div>'
 
     def test_biblio_tag(self):
-        result = build_endmatter_tag("References", "BIBLIO")
-        assert result == '<idi-endmatter type="BIBLIO">References</idi-endmatter>'
+        result = build_endmatter_page_tag("References", "BIBLIO")
+        assert result == '<div class="biblio">References</div>'
 
     def test_otherendmatter_tag(self):
-        result = build_endmatter_tag("Appendix", "OTHERENDMATTER")
-        assert result == '<idi-endmatter type="OTHERENDMATTER">Appendix</idi-endmatter>'
+        result = build_endmatter_page_tag("Appendix", "OTHERENDMATTER")
+        assert result == '<div class="otherendmatter">Appendix</div>'
 
     def test_escapes_content(self):
-        result = build_endmatter_tag("A & B", "TOC_INDEX")
+        result = build_endmatter_page_tag("A & B", "TOC_INDEX")
         assert "&amp;" in result
 
 
 class TestBuildParagraphTag:
     def test_paragraph_with_perplexity(self):
         result = build_paragraph_tag("Some text.", 12.5)
-        assert result == '<idi-paragraph perplexity="12.5">Some text.</idi-paragraph>'
+        assert result == '<p data-perplexity="12.5">Some text.</p>'
 
     def test_paragraph_without_perplexity(self):
         result = build_paragraph_tag("Some text.")
-        assert result == "<idi-paragraph>Some text.</idi-paragraph>"
+        assert result == "<p>Some text.</p>"
 
     def test_perplexity_formatting(self):
         result = build_paragraph_tag("Text", 8.123456)
-        assert 'perplexity="8.1"' in result
+        assert 'data-perplexity="8.1"' in result
 
     def test_escapes_content(self):
         result = build_paragraph_tag("A < B", 5.0)
         assert "&lt;" in result
 
+    def test_representative_attributes(self):
+        result = build_paragraph_tag("Rep text.", 9.2, "eng", representative_cluster="book1:10")
+        assert "data-representative" in result
+        assert 'data-clusterid="book1:10"' in result
+        assert 'data-perplexity="9.2"' in result
+        assert 'data-language="eng"' in result
+
 
 class TestBuildSectionTag:
     def test_section_with_perplexity(self):
-        content = "<idi-paragraph>P1</idi-paragraph>"
+        content = "<p>P1</p>"
         result = build_section_tag(content, 10.5)
-        assert '<idi-section perplexity="10.5">' in result
-        assert "</idi-section>" in result
+        assert '<section data-perplexity="10.5">' in result
+        assert "</section>" in result
         assert content in result
 
     def test_section_without_perplexity(self):
-        content = "<idi-paragraph>P1</idi-paragraph>"
+        content = "<p>P1</p>"
         result = build_section_tag(content)
-        assert "<idi-section>" in result
-        assert "</idi-section>" in result
+        assert "<section>" in result
+        assert "</section>" in result
 
 
 class TestBuildDuplicateTag:
     def test_duplicate_single_para(self):
-        content = "<idi-paragraph>Dup</idi-paragraph>"
-        result = build_duplicate_tag(content, "book1:p:5")
-        assert '<idi-duplicate cluster="book1:p:5">' in result
-        assert "</idi-duplicate>" in result
+        content = "<p>Dup</p>"
+        result = build_duplicate_tag(content, "book1:5")
+        assert '<aside data-cluster="book1:5">' in result
+        assert "</aside>" in result
 
     def test_duplicate_range(self):
-        content = "<idi-paragraph>Dup1</idi-paragraph>\n<idi-paragraph>Dup2</idi-paragraph>"
-        result = build_duplicate_tag(content, "book1:p:5-7")
-        assert 'cluster="book1:p:5-7"' in result
-
-
-class TestBuildRepresentativeTag:
-    def test_representative_tag(self):
-        content = "<idi-paragraph>Rep</idi-paragraph>"
-        result = build_representative_tag(content, "book1:p:3")
-        assert '<idi-representative cluster="book1:p:3">' in result
-        assert "</idi-representative>" in result
+        content = "<p>Dup1</p>\n<p>Dup2</p>"
+        result = build_duplicate_tag(content, "book1:5-7")
+        assert 'data-cluster="book1:5-7"' in result
 
 
 class TestGetParagraphText:
@@ -169,9 +167,9 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
         }
         result = annotate_middlematter(book)
-        assert "<idi-section>" in result
-        assert "<idi-paragraph" in result
-        assert "Hello world.</idi-paragraph>" in result
+        assert "<section>" in result
+        assert "<p" in result
+        assert "Hello world.</p>" in result
 
     def test_with_perplexity(self):
         book = {
@@ -181,7 +179,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
         }
         result = annotate_middlematter(book, perplexities=[12.5])
-        assert 'perplexity="12.5"' in result
+        assert 'data-perplexity="12.5"' in result
 
     def test_invalid_perplexity_excluded(self):
         book = {
@@ -192,7 +190,7 @@ class TestAnnotateMiddlematter:
         }
         # -1 indicates perplexity couldn't be computed
         result = annotate_middlematter(book, perplexities=[-1.0])
-        assert "perplexity=" not in result
+        assert "data-perplexity=" not in result
 
     def test_representative_paragraph(self):
         book = {
@@ -203,8 +201,8 @@ class TestAnnotateMiddlematter:
             "representative_paragraphs": {"0": True},
         }
         result = annotate_middlematter(book)
-        assert "<idi-representative" in result
-        assert 'cluster="book1:p:0"' in result
+        assert "data-representative" in result
+        assert 'data-clusterid="book1:0"' in result
 
     def test_duplicate_paragraph(self):
         book = {
@@ -212,10 +210,11 @@ class TestAnnotateMiddlematter:
             "middlematter_sentences": ["Duplicate content."],
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
-            "duplicate_paragraphs": {"0": "book2:p:5"},
+            "duplicate_paragraphs": {"0": "book2:5"},
         }
         result = annotate_middlematter(book)
-        assert "<idi-duplicate" in result
+        assert "<aside" in result
+        assert 'data-cluster="book2:5"' in result
 
     def test_consecutive_duplicates_merged_by_representative(self):
         """Consecutive duplicates referencing consecutive paragraphs in the same
@@ -225,13 +224,13 @@ class TestAnnotateMiddlematter:
             "middlematter_sentences": ["Dup1.", "Dup2.", "Dup3."],
             "subtopic_paragraph_start_indices": [0, 1, 2],
             "subtopic_section_start_indices": [0],
-            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookX:p:6", "2": "bookX:p:7"},
+            "duplicate_paragraphs": {"0": "bookX:5", "1": "bookX:6", "2": "bookX:7"},
         }
         result = annotate_middlematter(book)
         # Should reference the representative's range
-        assert 'cluster="bookX:p:5-7"' in result
-        # Should be a single duplicate tag wrapping all three
-        assert result.count("<idi-duplicate") == 1
+        assert 'data-cluster="bookX:5-7"' in result
+        # Should be a single aside wrapping all three
+        assert result.count("<aside") == 1
 
     def test_consecutive_duplicates_not_merged_different_books(self):
         """Consecutive duplicates referencing different representative books
@@ -241,12 +240,12 @@ class TestAnnotateMiddlematter:
             "middlematter_sentences": ["Dup1.", "Dup2."],
             "subtopic_paragraph_start_indices": [0, 1],
             "subtopic_section_start_indices": [0],
-            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookY:p:3"},
+            "duplicate_paragraphs": {"0": "bookX:5", "1": "bookY:3"},
         }
         result = annotate_middlematter(book)
-        assert 'cluster="bookX:p:5"' in result
-        assert 'cluster="bookY:p:3"' in result
-        assert result.count("<idi-duplicate") == 2
+        assert 'data-cluster="bookX:5"' in result
+        assert 'data-cluster="bookY:3"' in result
+        assert result.count("<aside") == 2
 
     def test_consecutive_duplicates_not_merged_nonconsecutive_refs(self):
         """Consecutive duplicates referencing non-consecutive paragraphs in the
@@ -256,12 +255,12 @@ class TestAnnotateMiddlematter:
             "middlematter_sentences": ["Dup1.", "Dup2."],
             "subtopic_paragraph_start_indices": [0, 1],
             "subtopic_section_start_indices": [0],
-            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookX:p:10"},
+            "duplicate_paragraphs": {"0": "bookX:5", "1": "bookX:10"},
         }
         result = annotate_middlematter(book)
-        assert 'cluster="bookX:p:5"' in result
-        assert 'cluster="bookX:p:10"' in result
-        assert result.count("<idi-duplicate") == 2
+        assert 'data-cluster="bookX:5"' in result
+        assert 'data-cluster="bookX:10"' in result
+        assert result.count("<aside") == 2
 
     def test_multiple_sections(self):
         book = {
@@ -272,7 +271,7 @@ class TestAnnotateMiddlematter:
         }
         result = annotate_middlematter(book)
         # Should have two sections
-        assert result.count("<idi-section>") == 2
+        assert result.count("<section>") == 2
 
 
 class TestDetectLanguage:
@@ -347,11 +346,11 @@ class TestDetectParagraphLanguages:
 class TestBuildParagraphTagWithLanguage:
     def test_paragraph_with_language(self):
         result = build_paragraph_tag("Text", language="eng")
-        assert result == '<idi-paragraph language="eng">Text</idi-paragraph>'
+        assert result == '<p data-language="eng">Text</p>'
 
     def test_paragraph_with_perplexity_and_language(self):
         result = build_paragraph_tag("Text", perplexity=10.5, language="deu")
-        assert result == '<idi-paragraph perplexity="10.5" language="deu">Text</idi-paragraph>'
+        assert result == '<p data-perplexity="10.5" data-language="deu">Text</p>'
 
 
 class TestAnnotateMiddlematterWithLanguage:
@@ -365,4 +364,4 @@ class TestAnnotateMiddlematterWithLanguage:
             "subtopic_section_start_indices": [0],
         }
         result = annotate_middlematter(book)
-        assert 'language="eng"' in result
+        assert 'data-language="eng"' in result

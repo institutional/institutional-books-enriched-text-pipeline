@@ -25,7 +25,7 @@ def annotate_book(
     Annotate a single book with duplicate information.
 
     Adds:
-    - duplicate_paragraphs: {"5": "other_book:p:3"} - paragraph 5 is dup of other_book paragraph 3
+    - duplicate_paragraphs: {"5": "other_book:3"} - paragraph 5 is dup of other_book paragraph 3
     - representative_paragraphs: {"3": true} - paragraph 3 is a cluster representative
     """
     book_id = book.get("barcode_src", "")

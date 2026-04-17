@@ -21,7 +21,11 @@ from loguru import logger
 
 from const.config import PipelineConfig, load_config
 from const.types import BookJSON
-from library.annotate.endmatter import annotate_endmatter_pages, load_em_subclassifier
+from library.annotate.endmatter import (
+    annotate_backmatter,
+    annotate_frontmatter,
+    load_em_subclassifier,
+)
 from library.annotate.middlematter import annotate_middlematter
 from utils.jsonl_io import load_perplexity_map
 
@@ -51,14 +55,14 @@ def annotate_book(
 
     # Annotate frontmatter
     frontmatter = book.get("frontmatter", [])
-    book["annotated_frontmatter"] = annotate_endmatter_pages(frontmatter, em_classifier)
+    book["annotated_frontmatter"] = annotate_frontmatter(frontmatter, em_classifier)
 
     # Annotate middlematter
     book["annotated_middlematter"] = annotate_middlematter(book, perplexities)
 
     # Annotate backmatter
     backmatter = book.get("backmatter", [])
-    book["annotated_backmatter"] = annotate_endmatter_pages(backmatter, em_classifier)
+    book["annotated_backmatter"] = annotate_backmatter(backmatter, em_classifier)
 
     return book
 
@@ -98,7 +102,7 @@ def main(
     Annotate books with semantic tags.
 
     Reads books with frontmatter/middlematter/backmatter and produces
-    annotated versions with XML-like semantic tags.
+    annotated versions with HTML semantic tags.
 
     Example:
         python -m commands.step13_annotate \\

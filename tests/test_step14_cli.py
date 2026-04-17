@@ -142,7 +142,7 @@ class TestStep14CLI:
         book = {
             "barcode_src": "book1",
             "language_gen": "eng",
-            "annotated_middlematter": "<idi-section>...</idi-section>",
+            "annotated_middlematter": "<section>...</section>",
             "middlematter_sentences": ["Content."],
         }
         input_file.write_text(json.dumps(book))
@@ -157,7 +157,7 @@ class TestStep14CLI:
         output_book = json.loads(output_file.read_text().strip())
         assert output_book["barcode_src"] == "book1"
         assert output_book["language_gen"] == "eng"
-        assert output_book["annotated_middlematter"] == "<idi-section>...</idi-section>"
+        assert output_book["annotated_middlematter"] == "<section>...</section>"
 
     def test_fails_on_missing_input_file(self, tmp_path: Path):
         """Test that CLI fails when input file doesn't exist."""

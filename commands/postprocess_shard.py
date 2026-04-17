@@ -41,21 +41,21 @@ def step13_annotate_book(
     perp_map: dict[str, list[float]],
 ) -> BookJSON:
     """Step 13: Annotate book with semantic tags."""
-    from library.annotate.endmatter import annotate_endmatter_pages
+    from library.annotate.endmatter import annotate_backmatter, annotate_frontmatter
 
     book_id = book.get("barcode_src", "UNKNOWN")
     perplexities = perp_map.get(book_id)
 
     # Annotate frontmatter
     frontmatter = book.get("frontmatter", [])
-    book["annotated_frontmatter"] = annotate_endmatter_pages(frontmatter, em_classifier)
+    book["annotated_frontmatter"] = annotate_frontmatter(frontmatter, em_classifier)
 
     # Annotate middlematter
     book["annotated_middlematter"] = annotate_middlematter(book, perplexities)
 
     # Annotate backmatter
     backmatter = book.get("backmatter", [])
-    book["annotated_backmatter"] = annotate_endmatter_pages(backmatter, em_classifier)
+    book["annotated_backmatter"] = annotate_backmatter(backmatter, em_classifier)
 
     return book
 

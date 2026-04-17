@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Protocol
 
 from const.types import NormPage
-from library.annotate.tags import build_endmatter_tag
+from library.annotate.tags import (
+    build_backmatter_tag,
+    build_endmatter_page_tag,
+    build_frontmatter_tag,
+)
 
 
 class EndmatterClassifier(Protocol):
@@ -36,34 +40,68 @@ def load_em_subclassifier(path: Path) -> EndmatterClassifier:
     return StaticModelPipeline.from_pretrained(path)  # type: ignore
 
 
-def annotate_endmatter_pages(
+def _annotate_endmatter_pages(
+    pages: list[NormPage],
+    classifier: EndmatterClassifier,
+) -> list[str]:
+    """
+    Classify and tag endmatter pages as divs.
+
+    Args:
+        pages: List of page texts.
+        classifier: Endmatter subclassifier model.
+
+    Returns:
+        List of tagged page divs, or empty list if no non-empty pages.
+    """
+    non_empty_pages = [p for p in pages if p and p.strip()]
+
+    if not non_empty_pages:
+        return []
+
+    predictions = classifier.predict(non_empty_pages)
+
+    return [
+        build_endmatter_page_tag(page, label)
+        for page, label in zip(non_empty_pages, predictions)
+    ]
+
+
+def annotate_frontmatter(
     pages: list[NormPage],
     classifier: EndmatterClassifier,
 ) -> str:
     """
-    Annotate endmatter pages with their classification tags.
-
-    Empty pages are filtered out. Results are joined with newlines.
+    Annotate frontmatter pages wrapped in a <header> tag.
 
     Args:
-        pages: List of page texts (frontmatter or backmatter).
+        pages: List of frontmatter page texts.
         classifier: Endmatter subclassifier model.
 
     Returns:
-        Single string of tagged pages joined by newlines, or empty string if no pages.
+        Tagged string like: <header><div class="toc_index">...</div>...</header>
     """
-    # Filter out empty pages
-    non_empty_pages = [p for p in pages if p and p.strip()]
-
-    if not non_empty_pages:
+    tagged = _annotate_endmatter_pages(pages, classifier)
+    if not tagged:
         return ""
+    return build_frontmatter_tag("\n".join(tagged))
 
-    # Classify all non-empty pages
-    predictions = classifier.predict(non_empty_pages)
 
-    # Build tagged output for each page
-    tagged_pages = []
-    for page, label in zip(non_empty_pages, predictions):
-        tagged_pages.append(build_endmatter_tag(page, label))
+def annotate_backmatter(
+    pages: list[NormPage],
+    classifier: EndmatterClassifier,
+) -> str:
+    """
+    Annotate backmatter pages wrapped in a <footer> tag.
 
-    return "\n".join(tagged_pages)
+    Args:
+        pages: List of backmatter page texts.
+        classifier: Endmatter subclassifier model.
+
+    Returns:
+        Tagged string like: <footer><div class="biblio">...</div>...</footer>
+    """
+    tagged = _annotate_endmatter_pages(pages, classifier)
+    if not tagged:
+        return ""
+    return build_backmatter_tag("\n".join(tagged))

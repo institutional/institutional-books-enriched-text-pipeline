@@ -76,8 +76,40 @@ class TestStep13CLI:
 
         output_book = json.loads(output_file.read_text().strip())
         # annotated_frontmatter is now a single string with pages joined by newlines
-        assert output_book["annotated_frontmatter"].count('<idi-endmatter type="TOC_INDEX">') == 2
-        assert '<idi-endmatter type="TOC_INDEX">' in output_book["annotated_frontmatter"]
+        assert "<header>" in output_book["annotated_frontmatter"]
+        assert output_book["annotated_frontmatter"].count('<div class="toc_index">') == 2
+
+    @patch("commands.step13_annotate.load_em_subclassifier")
+    def test_annotates_backmatter(self, mock_load_classifier, tmp_path: Path):
+        """Test that backmatter pages are wrapped in footer tags."""
+        mock_classifier = MagicMock()
+        mock_classifier.predict.return_value = ["BIBLIO", "OTHERENDMATTER"]
+        mock_load_classifier.return_value = mock_classifier
+
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.jsonl"
+
+        book = {
+            "barcode_src": "book1",
+            "frontmatter": [],
+            "middlematter_sentences": ["Content."],
+            "subtopic_paragraph_start_indices": [0],
+            "subtopic_section_start_indices": [0],
+            "backmatter": ["References page", "Appendix page"],
+        }
+        input_file.write_text(json.dumps(book))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            step13_main, ["--input-file", str(input_file), "--output-file", str(output_file)]
+        )
+
+        assert result.exit_code == 0
+
+        output_book = json.loads(output_file.read_text().strip())
+        assert "<footer>" in output_book["annotated_backmatter"]
+        assert '<div class="biblio">' in output_book["annotated_backmatter"]
+        assert '<div class="otherendmatter">' in output_book["annotated_backmatter"]
 
     @patch("commands.step13_annotate.load_em_subclassifier")
     def test_annotates_middlematter(self, mock_load_classifier, tmp_path: Path):
@@ -107,8 +139,8 @@ class TestStep13CLI:
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        assert "<idi-section>" in output_book["annotated_middlematter"]
-        assert "<idi-paragraph" in output_book["annotated_middlematter"]
+        assert "<section>" in output_book["annotated_middlematter"]
+        assert "<p" in output_book["annotated_middlematter"]
 
     @patch("commands.step13_annotate.load_em_subclassifier")
     def test_uses_perplexity_file(self, mock_load_classifier, tmp_path: Path):
