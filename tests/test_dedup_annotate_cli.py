@@ -74,7 +74,7 @@ class TestDedupAnnotateCLI:
 
         output_book = json.loads(shard_file.read_text().strip())
         assert "duplicate_paragraphs" in output_book
-        assert output_book["duplicate_paragraphs"]["0"] == "book2:p:5"
+        assert output_book["duplicate_paragraphs"]["0"] == "book2:5"
 
     def test_marks_representatives(self, tmp_path: Path):
         """Test that cluster representatives are marked correctly."""

@@ -45,7 +45,7 @@ def annotate_book(
             else:
                 # is a duplicate of rep
                 rep_book, rep_para = rep.rsplit(".", 1)
-                duplicate_annotations[str(i)] = f"{rep_book}:p:{rep_para}"
+                duplicate_annotations[str(i)] = f"{rep_book}:{rep_para}"
 
     if duplicate_annotations:
         book["duplicate_paragraphs"] = duplicate_annotations
