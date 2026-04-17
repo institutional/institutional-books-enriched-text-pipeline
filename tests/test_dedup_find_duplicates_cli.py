@@ -142,6 +142,34 @@ class TestDedupFindDuplicatesCLI:
             assert "." in rep  # Rep should be book_id.index format
             assert all("." in m for m in members)
 
+    def test_representative_is_alphabetically_first(self, tmp_path: Path):
+        """Test that the cluster representative is the alphabetically first member."""
+        input_dir = tmp_path / "simhashes"
+        input_dir.mkdir()
+        output_file = tmp_path / "clusters.json"
+
+        identical_hash = 123456789012345678901234567890
+        # bookZ comes first in file order, but bookA should be representative
+        simhash1 = {"book_id": "bookZ", "simhashes": [identical_hash]}
+        simhash2 = {"book_id": "bookA", "simhashes": [identical_hash]}
+        (input_dir / "shard1.simhashes.jsonl").write_text(json.dumps(simhash1))
+        (input_dir / "shard2.simhashes.jsonl").write_text(json.dumps(simhash2))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            dedup_find_main,
+            ["--input-dir", str(input_dir), "--output-file", str(output_file)],
+        )
+
+        assert result.exit_code == 0
+
+        output_data = json.loads(output_file.read_text())
+        clusters = output_data["clusters"]
+        assert len(clusters) == 1
+        rep = list(clusters.keys())[0]
+        assert rep == "bookA.0", f"Expected bookA.0 as representative, got {rep}"
+        assert sorted(clusters[rep]) == ["bookA.0", "bookZ.0"]
+
     def test_empty_input_directory(self, tmp_path: Path):
         """Test that CLI fails gracefully with empty input directory."""
         input_dir = tmp_path / "simhashes"

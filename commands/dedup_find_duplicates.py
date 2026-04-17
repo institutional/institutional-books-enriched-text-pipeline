@@ -532,11 +532,12 @@ def find_duplicates(
     raw_clusters = uf.get_clusters()
 
     # Filter to clusters with duplicates and convert to string doc_ids
+    # Use alphabetically first member as representative for determinism
     clusters: dict[str, list[str]] = {}
-    for root, members in tqdm(raw_clusters.items(), desc="Clusters"):
+    for _, members in tqdm(raw_clusters.items(), desc="Clusters"):
         if len(members) > 1:
-            root_doc_id = doc_idx_to_id(root)
-            clusters[root_doc_id] = sorted(doc_idx_to_id(m) for m in members)
+            member_ids = sorted(doc_idx_to_id(m) for m in members)
+            clusters[member_ids[0]] = member_ids
 
     timings["5_build_clusters"] = time.perf_counter() - t0
 
