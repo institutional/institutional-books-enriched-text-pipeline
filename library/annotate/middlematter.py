@@ -141,12 +141,22 @@ def annotate_middlematter(
                 para_idx += 1
 
             elif str_idx in duplicate_paras:
-                # Start of duplicate sequence - check for consecutive duplicates
-                dup_start = para_idx
-                dup_paras = []
+                # Collect consecutive duplicates that reference consecutive
+                # paragraphs in the same representative book
+                dup_paras_tags = []
+                start_dup = para_idx
+                first_ref = duplicate_paras[str_idx]
+                first_ref_book, first_ref_para = first_ref.rsplit(":p:", 1)
+                ref_para = int(first_ref_para)
 
-                # Collect consecutive duplicate paragraphs within same section
                 while para_idx < end_para and str(para_idx) in duplicate_paras:
+                    ref = duplicate_paras[str(para_idx)]
+                    ref_book, ref_p = ref.rsplit(":p:", 1)
+                    expected_para = ref_para + (para_idx - start_dup)
+
+                    if ref_book != first_ref_book or int(ref_p) != expected_para:
+                        break
+
                     d_text = get_paragraph_text(sentences, para_starts, para_idx)
                     d_perp = (
                         perplexities[para_idx]
@@ -154,24 +164,22 @@ def annotate_middlematter(
                         else None
                     )
                     d_perp_valid = d_perp if d_perp and d_perp > 0 else None
-                    d_lang = languages[para_idx] if para_idx < len(languages) else None
-                    dup_paras.append(build_paragraph_tag(d_text, d_perp_valid, d_lang))
-
-                    # Track perplexity for section mean
                     if d_perp is not None and d_perp > 0:
                         section_perplexities.append(d_perp)
-
+                    d_lang = languages[para_idx] if para_idx < len(languages) else None
+                    dup_paras_tags.append(
+                        build_paragraph_tag(d_text, d_perp_valid, d_lang)
+                    )
                     para_idx += 1
 
-                dup_end = para_idx - 1
-
-                # Build cluster reference
-                if dup_start == dup_end:
-                    cluster = f"{book_id}:p:{dup_start}"
+                # Build cluster reference to the representative's paragraph range
+                last_ref_para = ref_para + len(dup_paras_tags) - 1
+                if ref_para == last_ref_para:
+                    cluster = f"{first_ref_book}:p:{ref_para}"
                 else:
-                    cluster = f"{book_id}:p:{dup_start}-{dup_end}"
+                    cluster = f"{first_ref_book}:p:{ref_para}-{last_ref_para}"
 
-                dup_content = "\n".join(dup_paras)
+                dup_content = "\n".join(dup_paras_tags)
                 section_content.append(build_duplicate_tag(dup_content, cluster))
 
             else:

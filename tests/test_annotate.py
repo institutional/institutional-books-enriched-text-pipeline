@@ -217,17 +217,51 @@ class TestAnnotateMiddlematter:
         result = annotate_middlematter(book)
         assert "<idi-duplicate" in result
 
-    def test_consecutive_duplicates_merged(self):
+    def test_consecutive_duplicates_merged_by_representative(self):
+        """Consecutive duplicates referencing consecutive paragraphs in the same
+        representative book are merged into a single tag with a range reference."""
         book = {
             "barcode_src": "book1",
             "middlematter_sentences": ["Dup1.", "Dup2.", "Dup3."],
             "subtopic_paragraph_start_indices": [0, 1, 2],
             "subtopic_section_start_indices": [0],
-            "duplicate_paragraphs": {"0": "x:p:0", "1": "x:p:1", "2": "x:p:2"},
+            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookX:p:6", "2": "bookX:p:7"},
         }
         result = annotate_middlematter(book)
-        # Should have a range cluster
-        assert 'cluster="book1:p:0-2"' in result
+        # Should reference the representative's range
+        assert 'cluster="bookX:p:5-7"' in result
+        # Should be a single duplicate tag wrapping all three
+        assert result.count("<idi-duplicate") == 1
+
+    def test_consecutive_duplicates_not_merged_different_books(self):
+        """Consecutive duplicates referencing different representative books
+        should NOT be merged."""
+        book = {
+            "barcode_src": "book1",
+            "middlematter_sentences": ["Dup1.", "Dup2."],
+            "subtopic_paragraph_start_indices": [0, 1],
+            "subtopic_section_start_indices": [0],
+            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookY:p:3"},
+        }
+        result = annotate_middlematter(book)
+        assert 'cluster="bookX:p:5"' in result
+        assert 'cluster="bookY:p:3"' in result
+        assert result.count("<idi-duplicate") == 2
+
+    def test_consecutive_duplicates_not_merged_nonconsecutive_refs(self):
+        """Consecutive duplicates referencing non-consecutive paragraphs in the
+        same book should NOT be merged."""
+        book = {
+            "barcode_src": "book1",
+            "middlematter_sentences": ["Dup1.", "Dup2."],
+            "subtopic_paragraph_start_indices": [0, 1],
+            "subtopic_section_start_indices": [0],
+            "duplicate_paragraphs": {"0": "bookX:p:5", "1": "bookX:p:10"},
+        }
+        result = annotate_middlematter(book)
+        assert 'cluster="bookX:p:5"' in result
+        assert 'cluster="bookX:p:10"' in result
+        assert result.count("<idi-duplicate") == 2
 
     def test_multiple_sections(self):
         book = {
