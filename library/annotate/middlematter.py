@@ -83,9 +83,10 @@ def annotate_middlematter(
     if book_id == "UNKNOWN":
         raise ValueError("Unknown book_id in middlematter annotation")
 
-    # Get duplicate/representative info
+    # Get duplicate/representative/removed info
     duplicate_paras = book.get("duplicate_paragraphs", {})
     representative_paras = book.get("representative_paragraphs", {})
+    removed_paras = book.get("removed_paragraphs", {})
 
     if not sentences or not para_starts:
         return ""
@@ -127,7 +128,11 @@ def annotate_middlematter(
 
             str_idx = str(para_idx)
 
-            if str_idx in representative_paras:
+            if str_idx in removed_paras:
+                # Paragraph marked for removal — skip entirely
+                para_idx += 1
+
+            elif str_idx in representative_paras:
                 # Representative paragraph — cluster info goes on the <p> tag
                 para_lang = languages[para_idx] if para_idx < len(languages) else None
                 cluster = f"{book_id}:{para_idx}"
@@ -149,7 +154,7 @@ def annotate_middlematter(
                 first_ref_book, first_ref_para = first_ref.rsplit(":", 1)
                 ref_para = int(first_ref_para)
 
-                while para_idx < end_para and str(para_idx) in duplicate_paras:
+                while para_idx < end_para and str(para_idx) in duplicate_paras and str(para_idx) not in removed_paras:
                     ref = duplicate_paras[str(para_idx)]
                     ref_book, ref_p = ref.rsplit(":", 1)
                     expected_para = ref_para + (para_idx - start_dup)

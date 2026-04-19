@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import click
+import ijson
 from loguru import logger
 
 from const.types import BookJSON
@@ -79,16 +80,42 @@ def main(shard_file: Path, clusters_file: Path):
             --shard-file DATA/shards/processed/shard0001.complete.jsonl \\
             --clusters-file DATA/dedup/clusters.json
     """
-    with open(clusters_file) as f:
-        cluster_data = json.load(f)
+    ## Low Memory Strategy ##
+    #
+    # In practice, the clusters.json file may be large and there may be many
+    # shards we want to process in parallel. For each shard, we identify
+    # barcodes we care about. Then we stream the clusters.json file and keep
+    # only the relevant portions. And then we process the shard in place.
 
-    clusters = cluster_data["clusters"]
+    # Identify relevant barcodes
+    shard_barcodes: set[str] = set()
+    with open(shard_file) as f:
+        for line in f:
+            barcode = json.loads(line).get("barcode_src", "")
+            if barcode:
+                shard_barcodes.add(barcode)
+    logger.info(f"Found {len(shard_barcodes)} barcodes in shard")
 
+    # Extract relevant portions from clusters file
     doc_to_rep: dict[str, str] = {}
-    for rep, members in clusters.items():
-        for m in members:
-            doc_to_rep[m] = rep
+    clusters_scanned = 0
+    with open(clusters_file, "rb") as f:
+        for rep, members in ijson.kvitems(f, "clusters"):
+            clusters_scanned += 1
+            # Check if any member belongs to this shard
+            relevant = [m for m in members if m.rsplit(".", 1)[0] in shard_barcodes]
+            if relevant:
+                for m in relevant:
+                    doc_to_rep[m] = rep
+            if clusters_scanned % 5_000_000 == 0:
+                logger.info(f"Scanned {clusters_scanned} clusters, kept {len(doc_to_rep)} entries")
 
+    logger.info(
+        f"Scanned {clusters_scanned} clusters, "
+        + f"built lookup with {len(doc_to_rep)} entries for this shard"
+    )
+
+    # Process books
     complete_books: list[BookJSON] = []
     incomplete_books: list[BookJSON] = []
     stats = {
@@ -121,6 +148,12 @@ def main(shard_file: Path, clusters_file: Path):
                 incomplete_books.append(book)
                 stats["books_failed"] += 1
 
+            if (stats["books_processed"] + stats["books_failed"]) % 1000 == 0:
+                logger.info(
+                    f"Progress: {stats['books_processed'] + stats['books_failed']} books processed"
+                )
+
+    logger.info(f"Writing {len(complete_books)} annotated books to {shard_file}")
     atomic_write_jsonl(iter(complete_books), shard_file)
 
     if incomplete_books:
