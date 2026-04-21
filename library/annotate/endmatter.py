@@ -8,6 +8,7 @@ Uses the em_subclassifier model to classify endmatter pages into
 - OTHERENDMATTER: Other endmatter content
 """
 
+import warnings
 from pathlib import Path
 from typing import Protocol
 
@@ -59,7 +60,9 @@ def _annotate_endmatter_pages(
     if not non_empty_pages:
         return []
 
-    predictions = classifier.predict(non_empty_pages)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
+        predictions = classifier.predict(non_empty_pages)
 
     return [
         build_endmatter_page_tag(page, label)

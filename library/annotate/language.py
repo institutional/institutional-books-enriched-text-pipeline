@@ -5,7 +5,12 @@ Uses polyglot for language detection with fallback propagation for
 short or ambiguous paragraphs. Returns ISO-639-3 (3-letter) codes.
 """
 
+import logging
+
 import iso639
+
+# Suppress polyglot's noisy "Detector is not able to detect the language reliably." warnings
+logging.getLogger("polyglot.detect.base").setLevel(logging.ERROR)
 
 UNKNOWN = "UNKNOWN"
 
@@ -30,12 +35,12 @@ def detect_language(text: str) -> str:
     Returns:
         ISO-639-3 language code (e.g., 'eng', 'deu') or 'UNKNOWN' if detection fails.
     """
-    import polyglot.text
+    from polyglot.detect import Detector
 
     try:
         clean_text = text.replace("\u200b", "").replace("\n", " ")
-        nlp_text = polyglot.text.Text(clean_text)
-        lang = nlp_text.language
+        detector = Detector(clean_text, quiet=True)
+        lang = detector.language
         if lang.code and lang.code != "un":
             return iso639_1_to_3(lang.code)
     except Exception:
