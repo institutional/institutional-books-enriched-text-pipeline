@@ -109,10 +109,10 @@ class TestComputePerplexitiesInBook:
         with pytest.raises(ValueError, match="No paragraph indices"):
             compute_perplexities_in_book(book, model, tokenizer, "cpu")
 
-    @patch("library.perplexity.compute_perplexity.compute_perplexity")
-    def test_returns_correct_count(self, mock_compute):
+    @patch("library.perplexity.compute_perplexity.compute_perplexities_batched")
+    def test_returns_correct_count(self, mock_batched):
         """Test that perplexities count matches paragraph count."""
-        mock_compute.return_value = 10.0
+        mock_batched.return_value = [10.0, 10.0]
         model = MagicMock()
         tokenizer = MagicMock()
 
@@ -133,16 +133,10 @@ class TestComputePerplexitiesInBook:
         assert len(result["perplexities"]) == 2
         assert all(p == 10.0 for p in result["perplexities"])
 
-    @patch("library.perplexity.compute_perplexity.compute_perplexity")
-    def test_paragraphs_built_correctly(self, mock_compute):
+    @patch("library.perplexity.compute_perplexity.compute_perplexities_batched")
+    def test_paragraphs_built_correctly(self, mock_batched):
         """Test that paragraphs are built from sentences correctly."""
-        captured_texts = []
-
-        def capture_text(text, model, tokenizer, device):
-            captured_texts.append(text)
-            return 5.0
-
-        mock_compute.side_effect = capture_text
+        mock_batched.return_value = [5.0, 5.0]
         model = MagicMock()
         tokenizer = MagicMock()
 
@@ -154,5 +148,7 @@ class TestComputePerplexitiesInBook:
 
         compute_perplexities_in_book(book, model, tokenizer, "cpu")
 
-        # First paragraph: sentences 0-1, Second paragraph: sentences 2-3
-        assert captured_texts == ["A. B.", "C. D."]
+        # Verify the correct paragraphs were passed to batched computation
+        call_args = mock_batched.call_args
+        paragraphs_arg = call_args[0][0]
+        assert paragraphs_arg == ["A. B.", "C. D."]

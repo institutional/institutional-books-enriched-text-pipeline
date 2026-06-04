@@ -91,11 +91,19 @@ def finalize_output(progress_path: Path, final_path: Path) -> int:
     default=False,
     help="Resume from previous progress (skip already-processed books)",
 )
+@click.option(
+    "--batch-size",
+    type=int,
+    default=16,
+    show_default=True,
+    help="Batch size for paragraph inference (tune per GPU memory)",
+)
 def main(
     input_file: Path,
     output_file: Path,
     config_file: Path | None,
     resume: bool,
+    batch_size: int,
 ):
     """
     Compute perplexity for all paragraphs in a shard.
@@ -119,6 +127,9 @@ def main(
 
     # Progress file path
     progress_path = output_file.with_suffix(".progress.jsonl")
+    incomplete_path = output_file.with_name(
+        output_file.stem + ".incomplete.jsonl"
+    )
 
     # Load previously processed book IDs if resuming
     processed_book_ids: set[str] = set()
@@ -141,10 +152,12 @@ def main(
 
     books_processed = 0
     books_skipped = 0
+    books_failed = 0
     total_paragraphs = 0
 
-    # Open progress file for appending
+    # Open progress and incomplete files for appending
     progress_file = open(progress_path, "a", encoding="utf-8")
+    incomplete_file = open(incomplete_path, "a", encoding="utf-8")
 
     try:
         with open_jsonl(input_file, "r") as f_in:
@@ -158,7 +171,9 @@ def main(
                     continue
 
                 try:
-                    result = compute_perplexities_in_book(book, model, tokenizer, device)
+                    result = compute_perplexities_in_book(
+                        book, model, tokenizer, device, batch_size=batch_size
+                    )
                     record = {
                         "book_id": result["book_id"],
                         "perplexities": result["perplexities"],
@@ -170,22 +185,32 @@ def main(
                 except ValueError as e:
                     logger.warning(f"Skipping {book_id}: {e}")
                     books_skipped += 1
-                except torch.OutOfMemoryError:
-                    logger.warning(f"Skipping {book_id}: out of memory")
-                    books_skipped += 1
-                    torch.cuda.empty_cache()
+                except (torch.OutOfMemoryError, RuntimeError) as e:
+                    logger.warning(f"Failed {book_id}: {e}")
+                    incomplete_file.write(
+                        json.dumps({"book_id": book_id, "error": str(e)}) + "\n"
+                    )
+                    incomplete_file.flush()
+                    books_failed += 1
+                    if device == "cuda":
+                        torch.cuda.empty_cache()
 
     finally:
         progress_file.close()
+        incomplete_file.close()
 
     if resume and books_skipped > 0:
-        # Distinguish between skipped due to resume vs skipped due to errors
         resumed_count = len(processed_book_ids)
-        error_skipped = books_skipped - resumed_count
+        skip_other = books_skipped - resumed_count
         if resumed_count > 0:
             logger.info(f"Skipped {resumed_count} previously processed books")
-        if error_skipped > 0:
-            logger.info(f"Skipped {error_skipped} books due to errors")
+        if skip_other > 0:
+            logger.info(f"Skipped {skip_other} books due to validation errors")
+
+    if books_failed > 0:
+        logger.warning(
+            f"{books_failed} books failed (OOM/runtime error), logged to {incomplete_path}"
+        )
 
     # Finalize output: move progress file to final destination
     total_books = finalize_output(progress_path, output_file)
