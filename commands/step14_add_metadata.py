@@ -45,8 +45,11 @@ def add_metadata(
     perplexities = perp_map.get(book_id, [])
     perp_stats = compute_perplexity_stats(perplexities) if perplexities else {}
 
+    # Get language distribution (computed in step 13)
+    lang_dist = book.get("language_distribution_gen", {"languages": [], "proportion": []})
+
     # Combine all metadata
-    metadata = {**text_stats, **perp_stats}
+    metadata = {**text_stats, **perp_stats, **lang_dist}
 
     book["metadata"] = metadata
     return book

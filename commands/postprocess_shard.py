@@ -51,7 +51,9 @@ def step13_annotate_book(
     book["annotated_frontmatter"] = annotate_frontmatter(frontmatter, em_classifier)
 
     # Annotate middlematter
-    book["annotated_middlematter"] = annotate_middlematter(book, perplexities)
+    annotated_mm, lang_dist = annotate_middlematter(book, perplexities)
+    book["annotated_middlematter"] = annotated_mm
+    book["language_distribution_gen"] = lang_dist
 
     # Annotate backmatter
     backmatter = book.get("backmatter", [])

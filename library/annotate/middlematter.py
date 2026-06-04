@@ -15,6 +15,7 @@ from library.annotate.tags import (
     build_paragraph_tag,
     build_section_tag,
 )
+from library.metadata.language_stats import compute_language_distribution
 
 
 def get_paragraph_text(
@@ -65,7 +66,7 @@ def get_section_para_range(
 def annotate_middlematter(
     book: BookJSON,
     perplexities: list[float] | None = None,
-) -> str:
+) -> tuple[str, dict[str, list[str] | list[float]]]:
     """
     Annotate middlematter content with semantic tags.
 
@@ -74,7 +75,7 @@ def annotate_middlematter(
         perplexities: Optional list of perplexity values per paragraph.
 
     Returns:
-        Single annotated string containing all middlematter content.
+        Tuple of (annotated string, language distribution dict).
     """
     sentences = book.get("middlematter_sentences", [])
     para_starts = book.get("subtopic_paragraph_start_indices", [])
@@ -89,7 +90,7 @@ def annotate_middlematter(
     removed_paras = book.get("removed_paragraphs", {})
 
     if not sentences or not para_starts:
-        return ""
+        return "", {"languages": [], "proportion": []}
 
     # Default to one section containing all paragraphs
     if not section_starts:
@@ -203,4 +204,8 @@ def annotate_middlematter(
         section_inner = "\n".join(section_content)
         annotated_sections.append(build_section_tag(section_inner, section_perp))
 
-    return "\n".join(annotated_sections)
+    included_languages = [
+        languages[i] for i in range(len(languages)) if str(i) not in removed_paras
+    ]
+    lang_dist = compute_language_distribution(included_languages)
+    return "\n".join(annotated_sections), lang_dist

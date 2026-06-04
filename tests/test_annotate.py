@@ -156,8 +156,9 @@ class TestAnnotateMiddlematter:
             "middlematter_sentences": [],
             "subtopic_paragraph_start_indices": [],
         }
-        result = annotate_middlematter(book)
+        result, lang_dist = annotate_middlematter(book)
         assert result == ""
+        assert lang_dist == {"languages": [], "proportion": []}
 
     def test_single_paragraph(self):
         book = {
@@ -166,7 +167,7 @@ class TestAnnotateMiddlematter:
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert "<section>" in result
         assert "<p" in result
         assert "Hello world.</p>" in result
@@ -178,7 +179,7 @@ class TestAnnotateMiddlematter:
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
         }
-        result = annotate_middlematter(book, perplexities=[12.5])
+        result, _ = annotate_middlematter(book, perplexities=[12.5])
         assert 'data-perplexity="12.5"' in result
 
     def test_invalid_perplexity_excluded(self):
@@ -189,7 +190,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
         }
         # -1 indicates perplexity couldn't be computed
-        result = annotate_middlematter(book, perplexities=[-1.0])
+        result, _ = annotate_middlematter(book, perplexities=[-1.0])
         assert "data-perplexity=" not in result
 
     def test_representative_paragraph(self):
@@ -200,7 +201,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
             "representative_paragraphs": {"0": True},
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert "data-representative" in result
         assert 'data-clusterid="book1:0"' in result
 
@@ -212,7 +213,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
             "duplicate_paragraphs": {"0": "book2:5"},
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert "<aside" in result
         assert 'data-cluster="book2:5"' in result
 
@@ -226,7 +227,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
             "duplicate_paragraphs": {"0": "bookX:5", "1": "bookX:6", "2": "bookX:7"},
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         # Should reference the representative's range
         assert 'data-cluster="bookX:5-7"' in result
         # Should be a single aside wrapping all three
@@ -242,7 +243,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
             "duplicate_paragraphs": {"0": "bookX:5", "1": "bookY:3"},
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert 'data-cluster="bookX:5"' in result
         assert 'data-cluster="bookY:3"' in result
         assert result.count("<aside") == 2
@@ -257,7 +258,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
             "duplicate_paragraphs": {"0": "bookX:5", "1": "bookX:10"},
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert 'data-cluster="bookX:5"' in result
         assert 'data-cluster="bookX:10"' in result
         assert result.count("<aside") == 2
@@ -269,7 +270,7 @@ class TestAnnotateMiddlematter:
             "subtopic_paragraph_start_indices": [0, 1],
             "subtopic_section_start_indices": [0, 1],  # Each para in own section
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         # Should have two sections
         assert result.count("<section>") == 2
 
@@ -363,5 +364,5 @@ class TestAnnotateMiddlematterWithLanguage:
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
         }
-        result = annotate_middlematter(book)
+        result, _ = annotate_middlematter(book)
         assert 'data-language="eng"' in result
