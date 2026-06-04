@@ -12,6 +12,8 @@ Algorithm:
 2. Compute similarities between consecutive sentence windows
 3. Optionally smooth the similarity scores
 4. Identify valleys in similarity scores to determine chunk boundaries
+
+Institutional Books - Enriched Text - 2026
 """
 
 import bisect

@@ -1,5 +1,7 @@
 """
 step06_pagenumber_removal.py - remove page numbers
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

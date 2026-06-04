@@ -1,5 +1,7 @@
 """
 compute_bpb.py - core bits-per-byte computation logic.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import math

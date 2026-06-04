@@ -5,6 +5,8 @@ Computes BPB for each paragraph using a causal language model.
 Outputs to .bpb.jsonl files for use by postprocess_shard.py.
 
 This is designed to run on GPU nodes separately from the main pipeline.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

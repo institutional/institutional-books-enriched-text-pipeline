@@ -2,6 +2,8 @@
 jsonl_io.py - utilities for reading/writing JSONL files with optional gzip compression
 
 Provides transparent handling of .jsonl and .jsonl.gz files.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import gzip

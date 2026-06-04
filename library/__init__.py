@@ -10,5 +10,7 @@ Subpackages:
 
 
 **NOTE**: This is exposed as a library for generalizability. It is not necessary to interact with
-this code via a library for IBLLM purposes.
+this code via a library for IBET purposes.
+
+Institutional Books - Enriched Text - 2026
 """

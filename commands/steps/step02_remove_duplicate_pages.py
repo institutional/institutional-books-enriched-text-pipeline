@@ -2,6 +2,8 @@
 step02_remove_duplicate_pages.py - remove duplicate pages
 
 Detect duplicate pages within a single book and remove all but the first one.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

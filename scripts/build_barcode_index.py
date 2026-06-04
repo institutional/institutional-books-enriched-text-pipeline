@@ -13,6 +13,8 @@ Output format:
     {"32044000000018": "batch_00000.parquet", ...}
 
     (Values are filenames relative to the parquet directory, not full paths.)
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

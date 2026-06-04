@@ -3,6 +3,8 @@ Tests for simhash implementations (pure Python and C++ extension)
 
 Tests both the pure Python implementation (utils/simhash.py) and the
 C++ extension wrapper (utils/simhash_fast.py).
+
+Institutional Books - Enriched Text - 2026
 """
 
 import pytest

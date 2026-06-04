@@ -1,4 +1,7 @@
-"""Tests for library/chunk/ functions."""
+"""Tests for library/chunk/ functions.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from pathlib import Path
 

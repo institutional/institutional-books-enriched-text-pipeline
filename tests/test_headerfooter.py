@@ -2,6 +2,8 @@
 Tests for library/denoise/headerfooter.py
 
 Migrated from prototype_pipeline/commands/denoise/test_headerfooter_removal.py
+
+Institutional Books - Enriched Text - 2026
 """
 
 from library.denoise.headerfooter import (

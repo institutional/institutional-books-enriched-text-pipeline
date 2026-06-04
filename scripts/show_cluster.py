@@ -24,6 +24,8 @@ Usage:
         --parquet-dir DATA/Cluster/parquet_shards \
         --barcode-index DATA/Cluster/barcode_index.json \
         --max-text-len 0
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

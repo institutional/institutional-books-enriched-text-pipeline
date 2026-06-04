@@ -1,4 +1,7 @@
-"""Tests for library/metadata modules."""
+"""Tests for library/metadata modules.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import pytest
 

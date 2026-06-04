@@ -4,6 +4,8 @@ commands/steps - step registry and individual step commands.
 This package contains:
 - The canonical ordering of processing steps (MAIN_STEPS, POST_STEPS)
 - Individual step command modules (step01_*, step02_*, ..., step15_*)
+
+Institutional Books - Enriched Text - 2026
 """
 
 from typing import Optional

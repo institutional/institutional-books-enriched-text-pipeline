@@ -7,6 +7,8 @@ specifically requires manual investigation.
 Reads a JSON file listing cluster IDs to remove (e.g., library metadata),
 then marks all paragraphs belonging to those clusters (both representatives
 and duplicates) in the shard's books.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

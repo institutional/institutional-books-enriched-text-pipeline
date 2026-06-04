@@ -1,4 +1,7 @@
-"""Tests for library/segment/ segmenters."""
+"""Tests for library/segment/ segmenters.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch

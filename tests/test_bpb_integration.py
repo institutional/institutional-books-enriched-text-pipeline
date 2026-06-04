@@ -9,6 +9,8 @@ NOT committed to the repository — requires local model weights and data.
 Usage:
     pytest tests/test_bpb_integration.py -v
     pytest tests/test_bpb_integration.py -v -k test_batched_matches_sequential
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

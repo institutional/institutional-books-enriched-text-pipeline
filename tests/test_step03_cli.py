@@ -1,4 +1,7 @@
-"""Tests for commands/step03_separate_frontmatter_backmatter.py CLI."""
+"""Tests for commands/step03_separate_frontmatter_backmatter.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

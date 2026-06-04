@@ -10,6 +10,8 @@ by Choi (1999). Algorithm:
 
 Note: The core C99 algorithm is implemented in C++ for performance.
 This module provides the Python wrapper and book-level interface.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pathlib import Path

@@ -5,6 +5,8 @@ Validate that the book is assigned to the correct segmenter shard based on its l
 
 This step does not modify the book data, but raises an error if the book
 is in the wrong shard for its language.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

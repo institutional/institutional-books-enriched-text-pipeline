@@ -1,5 +1,7 @@
 """
 step10_chunk.py - topic-based chunking
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

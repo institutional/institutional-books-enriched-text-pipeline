@@ -1,4 +1,7 @@
-"""Tests for commands/step02_remove_duplicate_pages.py CLI."""
+"""Tests for commands/step02_remove_duplicate_pages.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

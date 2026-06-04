@@ -2,6 +2,8 @@
 step03_separate_frontmatter_backmatter.py - separate FMBM
 
 This uses pretrained model2vec classifiers.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

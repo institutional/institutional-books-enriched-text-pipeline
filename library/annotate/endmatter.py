@@ -6,6 +6,8 @@ Uses the em_subclassifier model to classify endmatter pages into
 - TOC_INDEX: Table of contents or indices
 - BIBLIO: Bibliography or references
 - OTHERENDMATTER: Other endmatter content
+
+Institutional Books - Enriched Text - 2026
 """
 
 import warnings

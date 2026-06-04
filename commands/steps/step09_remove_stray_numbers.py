@@ -1,5 +1,7 @@
 """
 step09_remove_stray_numbers.py - remove stray numbers
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

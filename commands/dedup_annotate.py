@@ -5,6 +5,8 @@ This is phase 3 of the deduplication workflow:
 1. Compute simhashes
 2. Find duplicates
 3. Annotate (this step)
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

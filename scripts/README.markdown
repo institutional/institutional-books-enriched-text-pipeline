@@ -90,7 +90,7 @@ python scripts/parquet_to_jsonl.py \
 ## Sampling and Training Data Preparation
 
 These scripts form a pipeline for sampling books by language, extracting
-paragraphs, and preparing train/test splits for LLM training experiments.
+paragraphs, and preparing train/test splits for text enrichment experiments.
 
 ### Pipeline overview
 

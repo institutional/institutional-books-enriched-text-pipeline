@@ -3,6 +3,8 @@ library/annotate/tags.py - Tag building utilities for annotation.
 
 Provides functions for constructing HTML semantic tags for the
 annotated output format.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from html import escape

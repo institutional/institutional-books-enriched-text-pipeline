@@ -1,4 +1,7 @@
-"""Tests for library/denoise/duplicate_pages.py"""
+"""Tests for library/denoise/duplicate_pages.py
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from typing import cast
 

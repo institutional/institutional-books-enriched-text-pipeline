@@ -8,6 +8,8 @@ span of 5 pages.
 
 If OCR incorrectly identifies text appearing at the top or bottom of the page,
 or if repeated content occurs somewhere else, then it won't be removed.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from itertools import islice

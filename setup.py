@@ -17,6 +17,8 @@ Build extensions:
 
 Install with extensions:
     pip install .
+
+Institutional Books - Enriched Text - 2026
 """
 
 import sys

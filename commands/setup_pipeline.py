@@ -6,6 +6,8 @@ later use in the pipeline. Also checks model2vec distilled models and
 classifiers (and optionally distills another model).
 
 In a standard workflow, this should be run after `prepare_shards.py`.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import subprocess

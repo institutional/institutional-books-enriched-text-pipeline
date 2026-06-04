@@ -1,4 +1,7 @@
-"""Tests for library/denoise/uniformize.py"""
+"""Tests for library/denoise/uniformize.py
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import pytest
 

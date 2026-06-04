@@ -1,5 +1,7 @@
 """
 library/metadata/bpb_stats.py - bits-per-byte statistics computation.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import statistics

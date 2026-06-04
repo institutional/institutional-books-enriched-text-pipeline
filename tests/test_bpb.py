@@ -1,4 +1,7 @@
-"""Tests for library/bpb/compute_bpb.py."""
+"""Tests for library/bpb/compute_bpb.py.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import math
 from unittest.mock import MagicMock, patch

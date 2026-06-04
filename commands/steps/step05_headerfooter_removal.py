@@ -1,5 +1,7 @@
 """
 step05_headerfooter_removal.py - header/footer removal
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

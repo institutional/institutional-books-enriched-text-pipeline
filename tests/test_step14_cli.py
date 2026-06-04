@@ -1,4 +1,7 @@
-"""Tests for commands/step14_add_metadata.py CLI."""
+"""Tests for commands/step14_add_metadata.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

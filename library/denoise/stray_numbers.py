@@ -4,6 +4,8 @@ stray_numbers.py
 The logic is similar to page number removal, except that this is expected to be
 used after sentence segmentation. This looks for sentences consisting almost
 entirely of numeric characters and removes them.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from const.config import PipelineConfig

@@ -1,5 +1,7 @@
 """
 text.py - text processing utilities
+
+Institutional Books - Enriched Text - 2026
 """
 
 import unicodedata

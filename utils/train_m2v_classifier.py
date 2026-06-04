@@ -1,5 +1,7 @@
 """
 train_m2v_classifier.py - script to train a model2vec classifier on training data
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

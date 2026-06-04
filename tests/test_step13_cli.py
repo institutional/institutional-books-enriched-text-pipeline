@@ -1,4 +1,7 @@
-"""Tests for commands/step13_annotate.py CLI."""
+"""Tests for commands/step13_annotate.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

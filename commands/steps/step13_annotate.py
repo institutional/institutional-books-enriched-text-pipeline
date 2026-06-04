@@ -11,6 +11,8 @@ Produces:
 - annotated_frontmatter: List of tagged page strings
 - annotated_middlematter: Single annotated string with all tags
 - annotated_backmatter: List of tagged page strings
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

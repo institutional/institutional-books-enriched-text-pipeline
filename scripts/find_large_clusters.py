@@ -1,4 +1,7 @@
-"""Find and analyze the largest duplicate clusters."""
+"""Find and analyze the largest duplicate clusters.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

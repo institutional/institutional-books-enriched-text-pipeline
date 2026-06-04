@@ -21,6 +21,8 @@ Usage:
         DATA/Cluster/clusters.json \
         --parquet-dir DATA/Cluster/parquet_shards \
         --cross-book-only
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

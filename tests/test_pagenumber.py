@@ -1,4 +1,7 @@
-"""Tests for library/denoise/pagenumber.py"""
+"""Tests for library/denoise/pagenumber.py
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from library.denoise.pagenumber import (
     detect_and_remove_page_numbers,

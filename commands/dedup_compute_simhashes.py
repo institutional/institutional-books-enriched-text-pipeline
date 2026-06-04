@@ -5,6 +5,8 @@ This is phase 1 of the deduplication workflow:
 1. Compute simhashes (this step) - parallelizable per shard
 2. Find duplicates - requires all simhashes
 3. Annotate - parallelizable per shard
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

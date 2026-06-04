@@ -1,7 +1,7 @@
-# Institutional Books LLM Pipeline #
+# Institutional Books Enriched Text Pipeline #
 
 The Institutional Data Initiative's pipeline for cleaning and optimizing the
-Institutional Books 1.0 collection for LLM training.
+Institutional Books 1.0 collection for text enrichment.
 
 
 ## Work in Progress ##

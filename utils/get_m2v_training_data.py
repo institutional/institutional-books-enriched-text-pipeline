@@ -8,6 +8,8 @@ Training data location: DATA/release_assets/m2v_training_data/
 Expected files:
   - m2v_training_data_topclassifier.jsonl (for fmem_classifier)
   - m2v_training_data_subclassifier.jsonl (for em_subclassifier)
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pathlib import Path
@@ -57,7 +59,7 @@ def get_training_data(
         # TODO: When public, download from GitHub releases instead of raising
         # Example future implementation:
         #   download_from_github_release(
-        #       repo="institutional/institutional-books-llm-pipeline",
+        #       repo="institutional/institutional-books-enriched-text-pipeline",
         #       tag="v1.0.0",
         #       assets=missing,
         #       output_dir=output_dir,

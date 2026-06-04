@@ -3,6 +3,8 @@ library/metadata/language_stats.py - Language distribution computation.
 
 Computes a distribution summary from pre-detected paragraph languages:
 which languages appear (with at least 5 paragraphs) and their proportions.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from collections import Counter

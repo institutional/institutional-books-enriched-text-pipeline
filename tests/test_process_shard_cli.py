@@ -1,4 +1,7 @@
-"""Tests for commands/process_shard.py CLI."""
+"""Tests for commands/process_shard.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

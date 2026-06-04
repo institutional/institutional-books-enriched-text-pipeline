@@ -6,6 +6,8 @@ Handles annotation of
 - Sections (groups of paragraphs)
 - Paragraphs (with BPB scores)
 - Duplicate/representative markers (with cluster references)
+
+Institutional Books - Enriched Text - 2026
 """
 
 from const.types import BookJSON

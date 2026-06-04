@@ -7,6 +7,8 @@ Build the extension:
 
 Or install via pip:
     pip install ./extensions/c99_banded_cpp
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext

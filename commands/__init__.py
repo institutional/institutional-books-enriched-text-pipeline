@@ -1,5 +1,5 @@
 """
-Commands package for IBLLM
+Commands package for IBET
 
 This includes the main commands:
 
@@ -12,4 +12,6 @@ This includes the main commands:
     cleanup
 
 This also includes individual step commands for fine-grained testing and application.
+
+Institutional Books - Enriched Text - 2026
 """

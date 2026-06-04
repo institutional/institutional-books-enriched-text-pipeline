@@ -1,5 +1,7 @@
 """
 config.py - config management
+
+Institutional Books - Enriched Text - 2026
 """
 
 from dataclasses import dataclass, field

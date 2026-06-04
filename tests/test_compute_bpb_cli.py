@@ -1,4 +1,7 @@
-"""Tests for commands/compute_bpb.py CLI."""
+"""Tests for commands/compute_bpb.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

@@ -12,6 +12,8 @@ ngrams from the book in question, and compare 5-gram scores with end-of-line
 hyphens removed vs kept-with-a-space vs kept-wthout-a-space.
 
 NOTE: earlier versions of this module used the KenLM ngram language model.
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pathlib import Path

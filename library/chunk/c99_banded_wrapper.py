@@ -9,6 +9,8 @@ The C++ extension can be built from extensions/c99_banded_cpp/.
 Fallback philosophy: Fail fast with ImportError. Unlike simhash which has a
 pure Python fallback, C99 has no fallback implementation. Callers must decide
 how to handle the missing extension (e.g., skip segmentation, use single segment).
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

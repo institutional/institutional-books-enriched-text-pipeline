@@ -1,5 +1,7 @@
 """
 compute_simhashes.py
+
+Institutional Books - Enriched Text - 2026
 """
 
 from typing import cast

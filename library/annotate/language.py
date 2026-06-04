@@ -3,6 +3,8 @@ library/annotate/language.py - Language detection for paragraphs.
 
 Uses polyglot for language detection with fallback propagation for
 short or ambiguous paragraphs. Returns ISO-639-3 (3-letter) codes.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import logging

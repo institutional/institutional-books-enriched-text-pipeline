@@ -1,4 +1,7 @@
-"""Tests for library/denoise/frontmatter.py"""
+"""Tests for library/denoise/frontmatter.py
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from pathlib import Path
 

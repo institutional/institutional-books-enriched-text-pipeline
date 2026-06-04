@@ -3,6 +3,8 @@ unionfind.py - Union-Find (Disjoint Set) data structure
 
 See for example https://en.wikipedia.org/wiki/Disjoint-set_data_structure
 and "Intro to Algorithms" v3 by CLRS, section 21.3.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import array

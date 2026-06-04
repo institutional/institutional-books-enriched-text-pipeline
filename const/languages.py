@@ -3,6 +3,8 @@ languages.py - Nupunkt vs SaT languages
 
 NUPUNKT_LANGUAGES: Languages where Nupunkt segmenter performs best.
 All other languages should use SAT (Segment-Any-Text).
+
+Institutional Books - Enriched Text - 2026
 """
 
 NUPUNKT_LANGUAGES = [

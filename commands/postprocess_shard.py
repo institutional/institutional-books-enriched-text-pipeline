@@ -2,6 +2,8 @@
 postprocess_shard.py - post-processing orchestrator for steps 13-15.
 
 Handles annotation, metadata computation, and cleanup after deduplication.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import gzip

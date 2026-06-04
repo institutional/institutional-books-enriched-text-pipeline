@@ -5,6 +5,8 @@ Computes various text metrics for books using:
 - tiktoken (o200k_base) for token counting
 - polyglot for word/sentence segmentation
 - Basic n-gram statistics
+
+Institutional Books - Enriched Text - 2026
 """
 
 from const.types import BookJSON, TextStats

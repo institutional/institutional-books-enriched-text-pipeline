@@ -1,5 +1,7 @@
 """
 step04_dehyphenate.py - dehyphenation
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

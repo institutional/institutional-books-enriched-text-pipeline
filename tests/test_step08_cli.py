@@ -1,4 +1,7 @@
-"""Tests for commands/step08_segment.py CLI."""
+"""Tests for commands/step08_segment.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

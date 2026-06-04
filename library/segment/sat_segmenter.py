@@ -2,6 +2,8 @@
 sat.py - sentence segmentation using Segment-Any-Text
 
 This is slow and wants a GPU.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import re

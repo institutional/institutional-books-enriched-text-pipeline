@@ -1,5 +1,7 @@
 """
 library/denoise/frontmatter.py - separate frontmatter and backmatter
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pathlib import Path

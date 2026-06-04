@@ -4,6 +4,8 @@ atomic_write.py - guarantee atomic writes for final files
 This is a naive atomic strategy: write to a temporary file first, then rename
 the file. On Linux, renaming is atomic. This prevents partial writes from
 corrupting output files.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import gzip

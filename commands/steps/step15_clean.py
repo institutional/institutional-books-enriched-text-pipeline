@@ -12,6 +12,8 @@ Removes:
 - Intermediate text fields: uniformized_text, frontmatter, middlematter, backmatter
 - Processing artifacts: duplicate_paragraphs, representative_paragraphs
 - Error fields: annotation_error, metadata_error
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

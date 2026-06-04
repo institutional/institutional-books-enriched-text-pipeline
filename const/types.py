@@ -1,5 +1,7 @@
 """
 types.py - user types
+
+Institutional Books - Enriched Text - 2026
 """
 
 from typing import Any, Callable, NewType, NotRequired, TypedDict

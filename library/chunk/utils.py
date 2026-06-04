@@ -2,6 +2,8 @@
 utils.py - Shared utilities for chunking
 
 Extracted from prototype_pipeline/commands/chunk/chunk_utils.py
+
+Institutional Books - Enriched Text - 2026
 """
 
 from pathlib import Path

@@ -6,6 +6,8 @@ Computes for middlematter only:
 - N-gram stats: bigram/trigram counts (total and unique)
 - Tokenizability: o200k_base tokenizability ratio
 - BPB stats: min, max, median, avg, and percentiles (if computed)
+
+Institutional Books - Enriched Text - 2026
 """
 
 import json

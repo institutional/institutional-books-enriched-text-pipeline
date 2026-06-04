@@ -3,6 +3,8 @@ ngrams.py - pure python ngram language model logic
 
 Fast, in-memory ngram tools. This is a cheap, less accurate, but sufficient
 alternative to KenLM models.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import gzip

@@ -10,6 +10,8 @@ Both implementations produce identical results.
 
 Fallback philosophy: Silent fallback to Python for development convenience.
 Production deployments should always use C++ for performance (100-300x faster).
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

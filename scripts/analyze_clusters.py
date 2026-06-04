@@ -14,6 +14,8 @@ Generate the book metadata file first:
     python scripts/extract_book_metadata.py \\
         --parquet-dir DATA/Cluster/parquet_shards \\
         --output-file DATA/Cluster/book_metadata.jsonl
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

@@ -2,6 +2,8 @@
 process_shard.py - main shard processing orchestrator
 
 Handles steps 1-10.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import gzip

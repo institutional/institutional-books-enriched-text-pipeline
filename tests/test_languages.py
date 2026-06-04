@@ -1,5 +1,7 @@
 """
 Basic tests for const/languages.py
+
+Institutional Books - Enriched Text - 2026
 """
 
 from const.languages import NUPUNKT_LANGUAGES, is_nupunkt_language

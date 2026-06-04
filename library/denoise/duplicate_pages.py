@@ -1,5 +1,7 @@
 """
 duplicate_pages.py - remove duplicate pages within a book using simhash
+
+Institutional Books - Enriched Text - 2026
 """
 
 from typing import Any

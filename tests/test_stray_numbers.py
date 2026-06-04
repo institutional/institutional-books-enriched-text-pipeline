@@ -1,4 +1,7 @@
-"""Tests for library/denoise/stray_numbers.py"""
+"""Tests for library/denoise/stray_numbers.py
+
+Institutional Books - Enriched Text - 2026
+"""
 
 from library.denoise.stray_numbers import (
     detect_and_remove_stray_number_fragments,

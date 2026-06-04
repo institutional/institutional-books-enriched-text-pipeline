@@ -1,4 +1,7 @@
-"""Tests for commands/step09_remove_stray_numbers.py CLI."""
+"""Tests for commands/step09_remove_stray_numbers.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path

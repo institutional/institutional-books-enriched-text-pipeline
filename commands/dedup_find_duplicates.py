@@ -5,6 +5,8 @@ This is phase 2 of the deduplication workflow:
 1. Compute simhashes - parallelizable per shard
 2. Find duplicates (this step) - requires all simhashes
 3. Annotate - parallelizable per shard
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

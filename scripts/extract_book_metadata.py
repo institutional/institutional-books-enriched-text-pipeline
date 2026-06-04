@@ -12,6 +12,8 @@ Usage:
 
 Output format (one JSON object per line):
     {"barcode": "32044000000018", "language": "eng", "n_paragraphs": 1252}
+
+Institutional Books - Enriched Text - 2026
 """
 
 from __future__ import annotations

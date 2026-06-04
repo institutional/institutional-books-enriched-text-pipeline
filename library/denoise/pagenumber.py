@@ -1,5 +1,7 @@
 """
 pagenumber.py - detect stray page numbers
+
+Institutional Books - Enriched Text - 2026
 """
 
 import unicodedata

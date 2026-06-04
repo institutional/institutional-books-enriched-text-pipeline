@@ -1,4 +1,7 @@
-"""Tests for library/annotate modules."""
+"""Tests for library/annotate modules.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 
 from library.annotate.language import (

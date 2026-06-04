@@ -2,6 +2,8 @@
 nupunkt_segmenter.py - sentence segmentation using Nupunkt models
 
 For each book, adapts the base language model to that book's text.
+
+Institutional Books - Enriched Text - 2026
 """
 
 import re

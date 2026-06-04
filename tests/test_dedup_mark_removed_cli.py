@@ -1,4 +1,7 @@
-"""Tests for commands/dedup_mark_removed.py CLI."""
+"""Tests for commands/dedup_mark_removed.py CLI.
+
+Institutional Books - Enriched Text - 2026
+"""
 
 import json
 from pathlib import Path
