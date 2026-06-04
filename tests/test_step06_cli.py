@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step06_pagenumber_removal import main as step06_main
+from commands.steps.step06_pagenumber_removal import main as step06_main
 
 
 class TestStep06CLI:

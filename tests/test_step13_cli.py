@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from commands.step13_annotate import main as step13_main
+from commands.steps.step13_annotate import main as step13_main
 
 
 class TestStep13CLI:
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_processes_jsonl_file(self, mock_load_classifier, tmp_path: Path):
         """Test that step13 CLI reads input JSONL and writes output JSONL."""
         # Mock classifier to return TOC_INDEX for all pages
@@ -47,7 +47,7 @@ class TestStep13CLI:
         assert "annotated_middlematter" in output_books[0]
         assert "annotated_backmatter" in output_books[0]
 
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_annotates_frontmatter(self, mock_load_classifier, tmp_path: Path):
         """Test that frontmatter pages are annotated with endmatter tags."""
         mock_classifier = MagicMock()
@@ -79,7 +79,7 @@ class TestStep13CLI:
         assert "<header>" in output_book["annotated_frontmatter"]
         assert output_book["annotated_frontmatter"].count('<div class="toc_index">') == 2
 
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_annotates_backmatter(self, mock_load_classifier, tmp_path: Path):
         """Test that backmatter pages are wrapped in footer tags."""
         mock_classifier = MagicMock()
@@ -111,7 +111,7 @@ class TestStep13CLI:
         assert '<div class="biblio">' in output_book["annotated_backmatter"]
         assert '<div class="otherendmatter">' in output_book["annotated_backmatter"]
 
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_annotates_middlematter(self, mock_load_classifier, tmp_path: Path):
         """Test that middlematter is annotated with section/paragraph tags."""
         mock_classifier = MagicMock()
@@ -142,7 +142,7 @@ class TestStep13CLI:
         assert "<section>" in output_book["annotated_middlematter"]
         assert "<p" in output_book["annotated_middlematter"]
 
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_uses_bpb_file(self, mock_load_classifier, tmp_path: Path):
         """Test that BPB values are included when file is provided."""
         mock_classifier = MagicMock()
@@ -181,7 +181,7 @@ class TestStep13CLI:
         output_book = json.loads(output_file.read_text().strip())
         assert 'data-bpb="0.8"' in output_book["annotated_middlematter"]
 
-    @patch("commands.step13_annotate.load_em_subclassifier")
+    @patch("commands.steps.step13_annotate.load_em_subclassifier")
     def test_processes_multiple_books(self, mock_load_classifier, tmp_path: Path):
         """Test that multiple books are processed correctly."""
         mock_classifier = MagicMock()

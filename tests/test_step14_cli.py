@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from commands.step14_add_metadata import main as step14_main
+from commands.steps.step14_add_metadata import main as step14_main
 
 
 class TestStep14CLI:
-    @patch("commands.step14_add_metadata.compute_text_stats")
+    @patch("commands.steps.step14_add_metadata.compute_text_stats")
     def test_processes_jsonl_file(self, mock_compute_stats, tmp_path: Path):
         """Test that step14 CLI reads input JSONL and writes output JSONL."""
         mock_compute_stats.return_value = {
@@ -53,7 +53,7 @@ class TestStep14CLI:
         assert "metadata" in output_books[0]
         assert output_books[0]["metadata"]["token_count"] == 100
 
-    @patch("commands.step14_add_metadata.compute_text_stats")
+    @patch("commands.steps.step14_add_metadata.compute_text_stats")
     def test_includes_bpb_stats(self, mock_compute_stats, tmp_path: Path):
         """Test that BPB statistics are included when file is provided."""
         mock_compute_stats.return_value = {
@@ -102,7 +102,7 @@ class TestStep14CLI:
         assert output_book["metadata"]["bpb_min"] == 0.8
         assert output_book["metadata"]["bpb_max"] == 1.6
 
-    @patch("commands.step14_add_metadata.compute_text_stats")
+    @patch("commands.steps.step14_add_metadata.compute_text_stats")
     def test_processes_multiple_books(self, mock_compute_stats, tmp_path: Path):
         """Test that multiple books are processed."""
         mock_compute_stats.side_effect = [
@@ -131,7 +131,7 @@ class TestStep14CLI:
         assert output_books[0]["metadata"]["token_count"] == 100
         assert output_books[1]["metadata"]["token_count"] == 200
 
-    @patch("commands.step14_add_metadata.compute_text_stats")
+    @patch("commands.steps.step14_add_metadata.compute_text_stats")
     def test_preserves_existing_fields(self, mock_compute_stats, tmp_path: Path):
         """Test that existing book fields are preserved."""
         mock_compute_stats.return_value = {"token_count": 100}

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from commands.step03_separate_frontmatter_backmatter import main as step03_main
+from commands.steps.step03_separate_frontmatter_backmatter import main as step03_main
 
 
 class MockClassifier:
@@ -45,7 +45,7 @@ class TestStep03CLI:
 
         runner = CliRunner()
         with patch(
-            "commands.step03_separate_frontmatter_backmatter.get_classifier",
+            "commands.steps.step03_separate_frontmatter_backmatter.get_classifier",
             return_value=MockClassifier(),
         ):
             result = runner.invoke(
@@ -80,7 +80,7 @@ class TestStep03CLI:
 
         runner = CliRunner()
         with patch(
-            "commands.step03_separate_frontmatter_backmatter.get_classifier",
+            "commands.steps.step03_separate_frontmatter_backmatter.get_classifier",
             return_value=MockClassifier(),
         ):
             result = runner.invoke(

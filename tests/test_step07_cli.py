@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step07_validate_segmenter import main as step07_main
+from commands.steps.step07_validate_segmenter import main as step07_main
 
 
 class TestStep07CLI:

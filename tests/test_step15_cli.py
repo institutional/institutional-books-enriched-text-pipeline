@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step15_clean import main as step15_main
+from commands.steps.step15_clean import main as step15_main
 
 
 class TestStep15CLI:

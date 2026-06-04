@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step01_uniformize_unicode import main as step01_main
+from commands.steps.step01_uniformize_unicode import main as step01_main
 
 
 class TestStep01CLI:

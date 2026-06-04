@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step02_remove_duplicate_pages import main as step02_main
+from commands.steps.step02_remove_duplicate_pages import main as step02_main
 
 
 class TestStep02CLI:

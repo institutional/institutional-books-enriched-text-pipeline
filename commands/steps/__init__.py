@@ -1,7 +1,9 @@
 """
-steps.py - a registry of steps
+commands/steps - step registry and individual step commands.
 
-This is the canonical order or processing steps.
+This package contains:
+- The canonical ordering of processing steps (MAIN_STEPS, POST_STEPS)
+- Individual step command modules (step01_*, step02_*, ..., step15_*)
 """
 
 from typing import Optional

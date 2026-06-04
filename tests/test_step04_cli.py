@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from commands.step04_dehyphenate import main as step04_main
+from commands.steps.step04_dehyphenate import main as step04_main
 from library.denoise.ngrams import NGramScorer, build_ngram_stats
 
 

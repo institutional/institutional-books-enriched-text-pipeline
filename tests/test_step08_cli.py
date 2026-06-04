@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from commands.step08_segment import main as step08_main
+from commands.steps.step08_segment import main as step08_main
 
 
 class TestStep08CLI:
@@ -26,7 +26,7 @@ class TestStep08CLI:
 
         assert result.exit_code != 0
 
-    @patch("commands.step08_segment.segment_book_nupunkt")
+    @patch("commands.steps.step08_segment.segment_book_nupunkt")
     def test_processes_nupunkt(self, mock_segment, tmp_path: Path):
         """Test that nupunkt segmenter is called for nupunkt option."""
         mock_segment.return_value = {
@@ -54,8 +54,8 @@ class TestStep08CLI:
         output_book = json.loads(output_file.read_text().strip())
         assert "middlematter_sentences" in output_book
 
-    @patch("commands.step08_segment.get_sat_model")
-    @patch("commands.step08_segment.segment_book_sat")
+    @patch("commands.steps.step08_segment.get_sat_model")
+    @patch("commands.steps.step08_segment.segment_book_sat")
     def test_processes_sat(self, mock_segment, mock_get_model, tmp_path: Path):
         """Test that sat segmenter is called for sat option."""
         mock_get_model.return_value = MagicMock()
@@ -81,7 +81,7 @@ class TestStep08CLI:
         assert output_file.exists()
         mock_segment.assert_called_once()
 
-    @patch("commands.step08_segment.segment_book_nupunkt")
+    @patch("commands.steps.step08_segment.segment_book_nupunkt")
     def test_processes_multiple_books(self, mock_segment, tmp_path: Path):
         """Test that multiple books are processed."""
         mock_segment.side_effect = [

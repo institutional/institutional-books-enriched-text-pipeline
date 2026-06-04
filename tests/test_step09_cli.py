@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step09_remove_stray_numbers import main as step09_main
+from commands.steps.step09_remove_stray_numbers import main as step09_main
 
 
 class TestStep09CLI:

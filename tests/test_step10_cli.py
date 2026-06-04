@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from commands.step10_chunk import main as step10_main
+from commands.steps.step10_chunk import main as step10_main
 
 
 class TestStep10CLI:
-    @patch("commands.step10_chunk.get_embedding_model")
-    @patch("commands.step10_chunk.chunk_book_texttiling")
+    @patch("commands.steps.step10_chunk.get_embedding_model")
+    @patch("commands.steps.step10_chunk.chunk_book_texttiling")
     def test_processes_jsonl_file(self, mock_chunk, mock_get_model, tmp_path: Path):
         """Test that step10 CLI reads input JSONL and writes output JSONL."""
         mock_get_model.return_value = MagicMock()
@@ -43,8 +43,8 @@ class TestStep10CLI:
         assert "subtopic_paragraph_start_indices" in output_books[0]
         assert "subtopic_section_start_indices" in output_books[0]
 
-    @patch("commands.step10_chunk.get_embedding_model")
-    @patch("commands.step10_chunk.chunk_book_texttiling")
+    @patch("commands.steps.step10_chunk.get_embedding_model")
+    @patch("commands.steps.step10_chunk.chunk_book_texttiling")
     def test_uses_texttiling_by_default(self, mock_texttiling, mock_get_model, tmp_path: Path):
         """Test that texttiling is used by default."""
         mock_get_model.return_value = MagicMock()
@@ -68,8 +68,8 @@ class TestStep10CLI:
         assert result.exit_code == 0
         mock_texttiling.assert_called_once()
 
-    @patch("commands.step10_chunk.get_embedding_model")
-    @patch("commands.step10_chunk.chunk_book_c99")
+    @patch("commands.steps.step10_chunk.get_embedding_model")
+    @patch("commands.steps.step10_chunk.chunk_book_c99")
     def test_algorithm_override_c99(self, mock_c99, mock_get_model, tmp_path: Path):
         """Test that --algorithm c99 uses C99 chunking."""
         mock_get_model.return_value = MagicMock()
@@ -98,8 +98,8 @@ class TestStep10CLI:
         assert result.exit_code == 0
         mock_c99.assert_called_once()
 
-    @patch("commands.step10_chunk.get_embedding_model")
-    @patch("commands.step10_chunk.chunk_book_texttiling")
+    @patch("commands.steps.step10_chunk.get_embedding_model")
+    @patch("commands.steps.step10_chunk.chunk_book_texttiling")
     def test_processes_multiple_books(self, mock_chunk, mock_get_model, tmp_path: Path):
         """Test that multiple books are processed."""
         mock_get_model.return_value = MagicMock()

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from commands.step05_headerfooter_removal import main as step05_main
+from commands.steps.step05_headerfooter_removal import main as step05_main
 
 
 class TestStep05CLI:
