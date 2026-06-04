@@ -46,7 +46,7 @@ def remove_headers_footers_book(
         logger.warning(f"{book_id} has no middlematter.")
         raise ValueError(f"{book_id} has no middlematter.")
 
-    cleaned_pages, _ = detect_and_clean_headers_footers(
+    cleaned_pages, locations_removed = detect_and_clean_headers_footers(
         middlematter,
         header_size=header_size,
         footer_size=footer_size,
@@ -57,6 +57,8 @@ def remove_headers_footers_book(
 
     result = book
     result["middlematter"] = cleaned_middlematter
+    if locations_removed:
+        result["_headers_footers_removed"] = len(locations_removed)
     return result
 
 

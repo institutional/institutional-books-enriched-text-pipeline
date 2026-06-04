@@ -33,7 +33,7 @@ def remove_stray_numbers_book(
         book_id = book.get("barcode_src", "UNKNOWN")
         raise ValueError(f"No 'sentences' found in book {book_id}")
 
-    cleaned_sentences = detect_and_remove_stray_number_fragments(
+    cleaned_sentences, num_removed = detect_and_remove_stray_number_fragments(
         sentences,
         threshold=threshold,
         min_length=min_length,
@@ -41,6 +41,8 @@ def remove_stray_numbers_book(
 
     result = book
     result["middlematter_sentences"] = cleaned_sentences
+    if num_removed > 0:
+        result["_stray_numbers_removed"] = num_removed
     return result
 
 
@@ -73,13 +75,16 @@ def detect_and_remove_stray_number_fragments(
     sentence_list: list[str],
     threshold: float = 0.9,
     min_length: int = 2,
-) -> list[str]:
+) -> tuple[list[str], int]:
     """
     Detect and remove stray number fragments from the sentence list.
+
+    Returns:
+        A tuple (cleaned_sentences, num_removed).
     """
     cleaned_sentences = [
         sentence
         for sentence in sentence_list
         if not is_probable_stray_number_fragment(sentence, threshold, min_length)
     ]
-    return cleaned_sentences
+    return cleaned_sentences, len(sentence_list) - len(cleaned_sentences)

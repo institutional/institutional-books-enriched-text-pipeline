@@ -122,15 +122,17 @@ class TestDehyphenatePage:
         stats = build_ngram_stats("test text")
         scorer = NGramScorer(stats)
         page = "Line one\nLine two\nLine three"
-        result = dehyphenate_page(page, scorer, scorer)
+        result, count = dehyphenate_page(page, scorer, scorer)
         assert result == page
+        assert count == 0
 
     def test_empty_page(self):
         """Test empty page is unchanged."""
         stats = build_ngram_stats("test text")
         scorer = NGramScorer(stats)
-        result = dehyphenate_page("", scorer, scorer)
+        result, count = dehyphenate_page("", scorer, scorer)
         assert result == ""
+        assert count == 0
 
 
 class TestDehyphenateMiddlematter:
@@ -141,25 +143,28 @@ class TestDehyphenateMiddlematter:
         stats = build_ngram_stats("test text")
         scorer = NGramScorer(stats)
         pages = ["Page one", "Page two"]
-        result = dehyphenate_middlematter(pages, scorer)
+        result, count = dehyphenate_middlematter(pages, scorer)
         assert isinstance(result, list)
         assert len(result) == len(pages)
+        assert count == 0
 
     def test_empty_pages(self):
         """Test with empty pages list."""
         stats = build_ngram_stats("test text")
         scorer = NGramScorer(stats)
-        result = dehyphenate_middlematter([], scorer)
+        result, count = dehyphenate_middlematter([], scorer)
         assert result == []
+        assert count == 0
 
     def test_preserves_unhyphenated_content(self):
         """Test that unhyphenated content is preserved."""
         stats = build_ngram_stats("test text")
         scorer = NGramScorer(stats)
         pages = ["Normal text here", "More normal text"]
-        result = dehyphenate_middlematter(pages, scorer)
+        result, count = dehyphenate_middlematter(pages, scorer)
         assert result[0] == pages[0]
         assert result[1] == pages[1]
+        assert count == 0
 
 
 class TestDehyphenateBook:
@@ -227,10 +232,11 @@ class TestDehyphenateWithRealModel:
 
         # "exer-\ncise" should become "exercise"
         page = "The athlete needed to exer-\ncise every day."
-        result = dehyphenate_page(page, scorer, scorer)
+        result, count = dehyphenate_page(page, scorer, scorer)
 
         # The hyphen should be removed, joining the word
         assert "exer-" not in result and "exercise" in result
+        assert count == 1
 
     def test_compound_word_preserved(self):
         """Test that legitimate compound words with hyphens are preserved."""
@@ -240,7 +246,7 @@ class TestDehyphenateWithRealModel:
         # "self-" at end of line followed by "esteem" - could go either way
         # but "well-known" mid-line should be preserved
         page = "This is a well-known fact.\nMore content here."
-        result = dehyphenate_page(page, scorer, scorer)
+        result, _count = dehyphenate_page(page, scorer, scorer)
 
         # Mid-line hyphen should be preserved
         assert "well-known" in result
@@ -256,12 +262,13 @@ class TestDehyphenateWithRealModel:
             "Normal text without any hyphenation at all.",
         ]
 
-        result = dehyphenate_middlematter(pages, scorer)
+        result, count = dehyphenate_middlematter(pages, scorer)
 
         assert len(result) == 3
         assert "scientist" in result[0]
         assert "paragraph" in result[1]
         assert result[2] == pages[2]
+        assert count == 2
 
     def test_preserves_all_content(self):
         """Test that dehyphenation preserves all text content."""
@@ -269,7 +276,7 @@ class TestDehyphenateWithRealModel:
         scorer = NGramScorer(stats)
 
         original = "The quick brown fox jumps over the la-\nzy dog."
-        result = dehyphenate_page(original, scorer, scorer)
+        result, _count = dehyphenate_page(original, scorer, scorer)
 
         # All words should still be present (possibly joined differently)
         for word in ["quick", "brown", "fox", "jumps", "over", "the", "dog"]:
@@ -285,13 +292,14 @@ pher contemplated the na-
 ture of existence and real-
 ity itself."""
 
-        result = dehyphenate_page(page, scorer, scorer)
+        result, count = dehyphenate_page(page, scorer, scorer)
 
         # Should produce fewer lines due to joining
         assert result.count("\n") < page.count("\n")
         assert "philosopher" in result
         assert "nature" in result
         assert "reality" in result
+        assert count == 3
 
     def test_short_corpus_book_adaptation(self):
         """Test that book-specific corpus improves dehyphenation."""
@@ -307,10 +315,11 @@ ity itself."""
         page = "The immuno-\nlogical response was studied."
 
         # Test with both scorers (simulating real dehyphenate_middlematter behavior)
-        result = dehyphenate_page(page, base_scorer, book_scorer)
+        result, count = dehyphenate_page(page, base_scorer, book_scorer)
 
         # Should successfully join the domain term
         assert "immuno-" not in result and "immunological" in result
+        assert count == 1
 
 
 class TestDehyphenateRealPatterns:

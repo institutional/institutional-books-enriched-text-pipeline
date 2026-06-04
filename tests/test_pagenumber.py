@@ -57,26 +57,29 @@ class TestDetectAndRemovePageNumbers:
             "42\nThis is the actual content.",
             "43\nMore content here.",
         ]
-        result = detect_and_remove_page_numbers(pages, header_lines=1, footer_lines=0)
+        result, count = detect_and_remove_page_numbers(pages, header_lines=1, footer_lines=0)
         assert "42" not in result[0]
         assert "43" not in result[1]
+        assert count == 2
 
     def test_removes_footer_numbers(self):
         pages = [
             "Content here.\n99",
             "More content.\n100",
         ]
-        result = detect_and_remove_page_numbers(pages, header_lines=0, footer_lines=1)
+        result, count = detect_and_remove_page_numbers(pages, header_lines=0, footer_lines=1)
         assert "99" not in result[0]
         assert "100" not in result[1]
+        assert count == 2
 
     def test_preserves_content(self):
         pages = [
             "42\nImportant content about 42 things.\n43",
         ]
-        result = detect_and_remove_page_numbers(pages, header_lines=1, footer_lines=1)
+        result, count = detect_and_remove_page_numbers(pages, header_lines=1, footer_lines=1)
         # Content in middle should be preserved
         assert "Important content about 42 things." in result[0]
+        assert count == 2
 
 
 class TestRemovePageNumbersBook:

@@ -77,9 +77,11 @@ def dehyphenate_book(
     model_dir = config.model_paths.ngram if config else Path("./DATA/pretrain/models")
     base_scorer = load_ngram_scorer(lang, model_dir, lm_cache)
 
-    dehyphenated = dehyphenate_middlematter(middlematter, base_scorer)
+    dehyphenated, num_removed = dehyphenate_middlematter(middlematter, base_scorer)
     result = book
     result["middlematter"] = dehyphenated
+    if num_removed > 0:
+        result["_dehyphenations"] = num_removed
     return result
 
 
@@ -101,11 +103,17 @@ def load_ngram_scorer(lang: str, model_dir: Path, cache: dict[str, NGramScorer])
     return cache[lang]
 
 
-def dehyphenate_middlematter(pages: list[NormPage], base_scorer: NGramScorer) -> list[NormPage]:
+def dehyphenate_middlematter(
+    pages: list[NormPage], base_scorer: NGramScorer
+) -> tuple[list[NormPage], int]:
     """
     Apply dehyphenation to each page.
 
     Builds a book-specific model to help with dehyphenation decisions.
+
+    Returns:
+        A tuple (dehyphenated_pages, num_removed) where num_removed is the
+        total number of hyphens removed across all pages.
     """
     # Build hard-normalized corpus for ngram scoring
     corpus = "\n".join(pages)
@@ -115,18 +123,25 @@ def dehyphenate_middlematter(pages: list[NormPage], base_scorer: NGramScorer) ->
     book_stats = build_ngram_stats(corpus, max_n=5)
     book_scorer = NGramScorer(book_stats)
 
-    return [dehyphenate_page(page, base_scorer, book_scorer) for page in pages]
+    total_removed = 0
+    result_pages = []
+    for page in pages:
+        dehyphenated, count = dehyphenate_page(page, base_scorer, book_scorer)
+        result_pages.append(dehyphenated)
+        total_removed += count
+    return result_pages, total_removed
 
 
 def dehyphenate_page(
     page_text: NormPage, base_scorer: NGramScorer, book_scorer: NGramScorer, window: int = 10
-) -> NormPage:
-    """Return page text with dehyphenation applied."""
+) -> tuple[NormPage, int]:
+    """Return page text with dehyphenation applied and count of hyphens removed."""
     lines = page_text.splitlines()
     if not lines:
-        return page_text
+        return page_text, 0
 
     result: list[SoftNormText] = []
+    removed = 0
     i = 0
     while i < len(lines):
         if i < len(lines) - 1 and ends_with_hyphen(lines[i].rstrip()):  # type: ignore
@@ -143,6 +158,7 @@ def dehyphenate_page(
                     stripped = stripped[:-1]
                 joined = stripped + lines[i + 1].lstrip()
                 lines[i + 1] = joined
+                removed += 1
             elif join_char == "-":
                 joined = lines[i].rstrip() + lines[i + 1].lstrip()
                 lines[i + 1] = joined
@@ -152,7 +168,7 @@ def dehyphenate_page(
         else:
             result.append(lines[i])  # type: ignore
         i += 1
-    return "\n".join(result)  # type: ignore
+    return "\n".join(result), removed  # type: ignore
 
 
 def char_join_hyphen_break(

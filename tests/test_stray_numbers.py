@@ -87,32 +87,38 @@ class TestIsProbableStrayNumberFragment:
 class TestDetectAndRemoveStrayNumberFragments:
     def test_removes_pure_numbers(self):
         sentences = ["Hello world.", "123", "Goodbye."]
-        result = detect_and_remove_stray_number_fragments(sentences)
+        result, count = detect_and_remove_stray_number_fragments(sentences)
         assert result == ["Hello world.", "Goodbye."]
+        assert count == 1
 
     def test_preserves_normal_sentences(self):
         sentences = ["This is a test.", "Another sentence.", "Final one."]
-        result = detect_and_remove_stray_number_fragments(sentences)
+        result, count = detect_and_remove_stray_number_fragments(sentences)
         assert result == sentences
+        assert count == 0
 
     def test_preserves_sentences_with_numbers(self):
         sentences = ["There are 42 items.", "Chapter 1 begins here."]
-        result = detect_and_remove_stray_number_fragments(sentences)
+        result, count = detect_and_remove_stray_number_fragments(sentences)
         assert result == sentences
+        assert count == 0
 
     def test_removes_multiple_stray_numbers(self):
         sentences = ["Text.", "456", "More text.", "789", "End."]
-        result = detect_and_remove_stray_number_fragments(sentences)
+        result, count = detect_and_remove_stray_number_fragments(sentences)
         assert result == ["Text.", "More text.", "End."]
+        assert count == 2
 
     def test_empty_list(self):
-        result = detect_and_remove_stray_number_fragments([])
+        result, count = detect_and_remove_stray_number_fragments([])
         assert result == []
+        assert count == 0
 
     def test_all_stray_numbers(self):
         sentences = ["123", "456", "789"]
-        result = detect_and_remove_stray_number_fragments(sentences)
+        result, count = detect_and_remove_stray_number_fragments(sentences)
         assert result == []
+        assert count == 3
 
 
 class TestRemoveStrayNumbersBook:
