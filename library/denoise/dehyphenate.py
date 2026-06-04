@@ -15,30 +15,30 @@ NOTE: earlier versions of this module used the KenLM ngram language model.
 """
 
 from pathlib import Path
-from typing import cast
 
 from loguru import logger
 
 from const.config import PipelineConfig
-from const.types import BookJSON, NormPage, NormText
+from const.types import BookJSON, HardNormText, NormPage, SoftNormText
 from library.denoise.ngrams import NGramScorer, build_ngram_stats, load_ngram_stats
+from library.denoise.uniformize import HYPHEN_LIKE
+
+_END_OF_LINE_HYPHENS = HYPHEN_LIKE | {"-"}
 
 
-def ends_with_hyphen(text: NormText) -> bool:
+def ends_with_hyphen(text: SoftNormText) -> bool:
     """Returns True if the given text ends with a hyphen-like character."""
     stripped = text.rstrip()
     if not stripped:
         return False
-    last_char = stripped[-1]
-    return last_char == "-"
+    return stripped[-1] in _END_OF_LINE_HYPHENS
 
 
 def has_hyphenated_lines(pages: list[NormPage]) -> bool:
     """Check if any line in any page ends with a hyphen."""
     for page in pages:
         for line in page.splitlines():
-            line = NormText(line)
-            if ends_with_hyphen(line):
+            if ends_with_hyphen(SoftNormText(line)):
                 return True
     return False
 
@@ -105,9 +105,9 @@ def dehyphenate_middlematter(pages: list[NormPage], base_scorer: NGramScorer) ->
 
     Builds a book-specific model to help with dehyphenation decisions.
     """
-    # Build corpus from pages
+    # Build hard-normalized corpus for ngram scoring
     corpus = "\n".join(pages)
-    corpus = cast(NormText, corpus)
+    corpus = HardNormText(corpus)
 
     # Build n-gram stats in memory
     book_stats = build_ngram_stats(corpus, max_n=5)
@@ -117,14 +117,14 @@ def dehyphenate_middlematter(pages: list[NormPage], base_scorer: NGramScorer) ->
 
 
 def dehyphenate_page(
-    page_text: NormPage, base_scorer: NGramScorer, book_scorer: NGramScorer, window: int = 30
+    page_text: NormPage, base_scorer: NGramScorer, book_scorer: NGramScorer, window: int = 10
 ) -> NormPage:
     """Return page text with dehyphenation applied."""
     lines = page_text.splitlines()
     if not lines:
         return page_text
 
-    result: list[NormText] = []
+    result: list[SoftNormText] = []
     i = 0
     while i < len(lines):
         if i < len(lines) - 1 and ends_with_hyphen(lines[i].rstrip()):  # type: ignore
@@ -136,7 +136,10 @@ def dehyphenate_page(
                 window=window,
             )
             if join_char == "":
-                joined = lines[i].rstrip().rstrip("-") + lines[i + 1].lstrip()
+                stripped = lines[i].rstrip()
+                while stripped and stripped[-1] in _END_OF_LINE_HYPHENS:
+                    stripped = stripped[:-1]
+                joined = stripped + lines[i + 1].lstrip()
                 lines[i + 1] = joined
             elif join_char == "-":
                 joined = lines[i].rstrip() + lines[i + 1].lstrip()
@@ -151,11 +154,11 @@ def dehyphenate_page(
 
 
 def char_join_hyphen_break(
-    prev_line: NormText,
-    next_line: NormText,
+    prev_line: SoftNormText,
+    next_line: SoftNormText,
     base_lm: NGramScorer,
     book_lm: NGramScorer,
-    window: int = 30,
+    window: int = 10,
 ) -> str:
     """
     Determine whether a hyphen at the end of prev_line should be removed,

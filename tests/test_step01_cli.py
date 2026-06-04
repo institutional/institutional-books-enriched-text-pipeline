@@ -35,11 +35,12 @@ class TestStep01CLI:
         assert output_books[0]["barcode_src"] == "book1"
 
     def test_unicode_normalization_applied(self, tmp_path: Path):
-        """Test that unicode normalization is actually applied."""
+        """Test that light normalization is applied (spaces, zero-width)."""
         input_file = tmp_path / "input.jsonl"
         output_file = tmp_path / "output.jsonl"
 
-        book = {"barcode_src": "test", "text_by_page_src": ["Hello\u2014world"]}
+        # non-breaking space and zero-width space
+        book = {"barcode_src": "test", "text_by_page_src": ["Hello\u00a0\u200bworld"]}
         input_file.write_text(json.dumps(book))
 
         runner = CliRunner()
@@ -49,4 +50,22 @@ class TestStep01CLI:
 
         assert result.exit_code == 0
         output_book = json.loads(output_file.read_text().strip())
-        assert output_book["uniformized_text"] == ["Hello-world"]
+        # non-breaking space -> regular space, zero-width removed
+        assert output_book["uniformized_text"] == ["Hello world"]
+
+    def test_preserves_hyphens_and_quotes(self, tmp_path: Path):
+        """Test that light normalization preserves hyphens and quotes."""
+        input_file = tmp_path / "input.jsonl"
+        output_file = tmp_path / "output.jsonl"
+
+        book = {"barcode_src": "test", "text_by_page_src": ["Hello\u2014\u201cworld\u201d"]}
+        input_file.write_text(json.dumps(book))
+
+        runner = CliRunner()
+        result = runner.invoke(
+            step01_main, ["--input-file", str(input_file), "--output-file", str(output_file)]
+        )
+
+        assert result.exit_code == 0
+        output_book = json.loads(output_file.read_text().strip())
+        assert output_book["uniformized_text"] == ["Hello\u2014\u201cworld\u201d"]

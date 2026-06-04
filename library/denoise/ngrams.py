@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from math import log10
 from pathlib import Path
 
-from const.types import NormText, RawText
+from const.types import HardNormText, RawText
 from library.denoise.uniformize import normalize_text, to_char_tokens
 
 
@@ -79,9 +79,6 @@ class NGramScorer:
         """
         Returns log10 probability score for raw input text.
         """
-        # TODO: determine whether renormalization is necessary or if can be
-        # skipped. It's a good defensive tool, but I think we always feed
-        # normalized text?
         norm = normalize_text(raw_text)
         if not norm:
             return float("-inf")
@@ -106,7 +103,7 @@ class NGramScorer:
         return total_score
 
 
-def build_ngram_stats(text: NormText, max_n: int = 5) -> NGramStats:
+def build_ngram_stats(text: HardNormText, max_n: int = 5) -> NGramStats:
     stats = NGramStats(max_n=max_n)
 
     if not text:

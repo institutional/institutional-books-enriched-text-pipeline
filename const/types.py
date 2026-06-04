@@ -17,12 +17,15 @@ type BooksByLangDict = dict[LanguageCode, list[BookJSON]]
 
 # Distinct types for better type checking
 RawText = NewType("RawText", str)  # pre normalization
-NormText = NewType("NormText", str)  # post normalization
+SoftNormText = NewType("SoftNormText", str)  # after light normalization (NFC + spaces + zero-width)
+HardNormText = NewType("HardNormText", str)  # after full normalization (NFKC + all)
+NormText = SoftNormText  # general "normalized text" used throughout pipeline
 CharTokens = NewType("CharTokens", str)
 
 # Semantically different but not type different
 type RawPage = RawText
-type NormPage = NormText
+type SoftNormPage = SoftNormText
+type NormPage = SoftNormText
 
 type PageIdx = int
 type SimhashHash = int

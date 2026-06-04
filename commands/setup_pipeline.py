@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from const.config import PipelineConfig, load_config
 from const.languages import is_nupunkt_language
-from const.types import BookJSON, BooksByLangDict, NormPage, NormText, RawPage
+from const.types import BookJSON, BooksByLangDict, HardNormText, RawPage
 from library.denoise.ngrams import build_ngram_stats, save_ngram_stats
 from library.denoise.uniformize import normalize_text
 from utils.jsonl_io import iter_jsonl
@@ -104,7 +104,7 @@ def build_ngram_stats_for_language(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pages_processed = 0
 
-    corpus_parts: list[NormPage] = []
+    corpus_parts: list[HardNormText] = []
     for book in books:
         pages = extract_pages_from_book(book)
         for page in pages:
@@ -117,7 +117,7 @@ def build_ngram_stats_for_language(
             pages_processed += 1
     # Build ngram stats
     corpus = "\n".join(corpus_parts)
-    corpus = NormText(corpus)  # python type warts
+    corpus = HardNormText(corpus)
     stats = build_ngram_stats(corpus, max_n=max_n)
     save_ngram_stats(stats, output_path)
 

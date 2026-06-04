@@ -7,14 +7,37 @@ from library.denoise.uniformize import normalize_unicode_in_page, uniformize_boo
 
 
 class TestNormalizeUnicodeInPage:
-    def test_basic_normalization(self):
-        # NFKC should normalize full-width chars
-        result = normalize_unicode_in_page("Ｈｅｌｌｏ")
-        assert result == "Hello"
+    def test_nfc_normalization(self):
+        # NFC composes decomposed characters (e.g. e + combining acute -> é)
+        result = normalize_unicode_in_page("é")  # e + combining acute accent
+        assert result == "é"  # é (precomposed)
+
+    def test_preserves_fullwidth_chars(self):
+        # NFC (not NFKC) preserves fullwidth characters
+        result = normalize_unicode_in_page("Ａ")  # fullwidth A
+        assert result == "Ａ"
+
+    def test_removes_zero_width(self):
+        result = normalize_unicode_in_page("hello​world")
+        assert result == "helloworld"
+
+    def test_normalizes_spaces(self):
+        result = normalize_unicode_in_page("hello world")
+        assert result == "hello world"
 
     def test_preserves_newlines(self):
         result = normalize_unicode_in_page("line1\nline2\nline3")
         assert result == "line1\nline2\nline3"
+
+    def test_preserves_hyphens(self):
+        # Light normalization should NOT normalize hyphens
+        result = normalize_unicode_in_page("word—another")
+        assert result == "word—another"
+
+    def test_preserves_quotes(self):
+        # Light normalization should NOT normalize quotes
+        result = normalize_unicode_in_page("“Hello”")
+        assert result == "“Hello”"
 
     def test_empty_page(self):
         result = normalize_unicode_in_page("")

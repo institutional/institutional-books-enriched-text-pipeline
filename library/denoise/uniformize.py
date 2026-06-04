@@ -4,9 +4,16 @@ uniformize.py - unicode normalization
 
 import re
 import unicodedata
-from typing import cast
 
-from const.types import BookJSON, CharTokens, NormPage, NormText, RawPage, RawText
+from const.types import (
+    BookJSON,
+    CharTokens,
+    HardNormText,
+    RawPage,
+    RawText,
+    SoftNormPage,
+    SoftNormText,
+)
 
 
 def uniformize_book(book: BookJSON) -> BookJSON:
@@ -14,6 +21,7 @@ def uniformize_book(book: BookJSON) -> BookJSON:
     Uniformize unicode characters in a book's text.
 
     Reads from 'text_by_page_src' and creates 'uniformized_text'.
+    Applies light normalization: NFC, zero-width removal, space normalization.
     """
     book_text: list[RawPage] | None = book.get("text_by_page_src")
 
@@ -33,15 +41,15 @@ def uniformize_book(book: BookJSON) -> BookJSON:
     return result
 
 
-def normalize_unicode_in_page(raw_page: RawPage) -> NormPage:
+def normalize_unicode_in_page(raw_page: RawPage) -> SoftNormPage:
     """
-    Normalize each line of text in a page.
+    Light normalization of a page: NFC, zero-width removal, space normalization.
 
     Preserves line breaks.
     """
-    normalized_lines = [normalize_text(RawText(line)) for line in raw_page.splitlines()]
-    joined = "\n".join(cast(list[str], normalized_lines))  # python type warts
-    return cast(NormPage, joined)
+    normalized_lines = [light_normalize_text(RawText(line)) for line in raw_page.splitlines()]
+    joined = "\n".join(normalized_lines)
+    return SoftNormText(joined)
 
 
 # All will be mapped to ASCII hyphen-minus ("-")
@@ -119,9 +127,24 @@ def normalize_quotes(text: str) -> str:
     return text.translate(QUOTE_MAP)
 
 
-def normalize_text(raw: RawText) -> NormText:
+def light_normalize_text(raw: RawText) -> SoftNormText:
     """
-    Transform raw text into normalized form.
+    Light normalization: NFC, zero-width removal, space normalization.
+    """
+    text = unicodedata.normalize("NFC", raw)
+    text = remove_zero_width(text)
+    text = normalize_spaces(text)
+    text = re.sub(r" +", " ", text)
+    text = text.strip()
+    return SoftNormText(text)
+
+
+def hard_normalize_unicode(raw: RawText | SoftNormText) -> HardNormText:
+    """
+    Full normalization: NFKC plus hyphens, spaces, quotes, whitespace collapse.
+
+    Used for simhash deduplication, ngram models, and duplicate page detection
+    where consistency with pretrained models is required.
     """
     # 1. Unicode normalization
     text = unicodedata.normalize("NFKC", raw)
@@ -142,14 +165,18 @@ def normalize_text(raw: RawText) -> NormText:
     # 9. Strip leading/trailing spaces
     text = text.strip()
 
-    return NormText(text)
+    return HardNormText(text)
 
 
-def to_char_tokens(text: NormText) -> CharTokens:
+# Keep as alias for backward compatibility with ngram model training/scoring
+normalize_text = hard_normalize_unicode
+
+
+def to_char_tokens(text: HardNormText) -> CharTokens:
     """
     Convert text to space-separated character tokens (e.g. for KenLM).
 
     Spaces are represented as the special token "<sp>".
     """
     ret = " ".join("<sp>" if ch == " " else ch for ch in text)
-    return cast(CharTokens, ret)
+    return CharTokens(ret)

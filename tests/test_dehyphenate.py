@@ -38,6 +38,21 @@ class TestEndsWithHyphen:
         """Test whitespace-only string returns False."""
         assert ends_with_hyphen("   ") is False
 
+    def test_en_dash(self):
+        """Test detection of en dash at end of line."""
+        assert ends_with_hyphen("word–") is True
+
+    def test_em_dash(self):
+        """Test detection of em dash at end of line."""
+        assert ends_with_hyphen("word—") is True
+
+    def test_all_hyphen_like(self):
+        """Test that all HYPHEN_LIKE characters are detected."""
+        from library.denoise.uniformize import HYPHEN_LIKE
+
+        for ch in HYPHEN_LIKE:
+            assert ends_with_hyphen(f"word{ch}") is True, f"Failed for U+{ord(ch):04X}"
+
 
 class TestHasHyphenatedLines:
     """Tests for has_hyphenated_lines function."""
@@ -50,6 +65,11 @@ class TestHasHyphenatedLines:
     def test_with_hyphen(self):
         """Test pages with hyphenated lines."""
         pages = ["Line one-", "continuation", "Line three"]
+        assert has_hyphenated_lines(pages) is True
+
+    def test_with_en_dash(self):
+        """Test pages with en dash at end of line."""
+        pages = ["Line one–\ncontinuation"]
         assert has_hyphenated_lines(pages) is True
 
     def test_hyphen_in_middle(self):

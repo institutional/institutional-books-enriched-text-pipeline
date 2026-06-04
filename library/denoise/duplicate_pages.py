@@ -5,6 +5,7 @@ duplicate_pages.py - remove duplicate pages within a book using simhash
 from typing import Any
 
 from const.types import BookJSON, NormPage, PageIdx, SimhashHash
+from library.denoise.uniformize import hard_normalize_unicode
 from utils.simhash_fast import are_near_duplicates, simhash128
 from utils.unionfind import UnionFind
 
@@ -86,7 +87,8 @@ def detect_duplicate_pages(
         if len(page.strip()) < min_length:
             short_pages.add(idx)
             continue
-        h = simhash128(page, ngram_size=ngram_size)
+        normalized = hard_normalize_unicode(page)
+        h = simhash128(normalized, ngram_size=ngram_size)
         page_hashes.append((idx, h))
 
     if len(page_hashes) < 2:

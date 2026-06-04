@@ -8,6 +8,8 @@ from library.denoise.uniformize import (
     SOFT_HYPHEN,
     SPACE_LIKE,
     ZERO_WIDTH,
+    hard_normalize_unicode,
+    light_normalize_text,
     normalize_hyphens,
     normalize_quotes,
     normalize_spaces,
@@ -163,48 +165,99 @@ class TestNormalizeQuotes:
         assert normalize_quotes("") == ""
 
 
-class TestNormalizeText:
-    """Test the main normalize_text pipeline."""
+class TestHardNormalizeUnicode:
+    """Test the hard_normalize_unicode (full NFKC + all normalizations)."""
 
     def test_basic_normalization(self):
         """Basic text should be cleaned up."""
-        assert normalize_text("  hello   world  ") == "hello world"
+        assert hard_normalize_unicode("  hello   world  ") == "hello world"
 
     def test_newlines_become_spaces(self):
         """Newlines should become spaces."""
-        assert normalize_text("hello\nworld") == "hello world"
+        assert hard_normalize_unicode("hello\nworld") == "hello world"
 
     def test_tabs_become_spaces(self):
         """Tabs should become spaces."""
-        assert normalize_text("hello\tworld") == "hello world"
+        assert hard_normalize_unicode("hello\tworld") == "hello world"
 
     def test_crlf_normalization(self):
         """CRLF should be handled."""
-        assert normalize_text("hello\r\nworld") == "hello world"
+        assert hard_normalize_unicode("hello\r\nworld") == "hello world"
 
     def test_combined_normalization(self):
         """Test that all normalizations work together."""
         text = "\u201cHello\u201d\u2013world\u00a0test\u200b!"
         expected = '"Hello"-world test!'
-        assert normalize_text(text) == expected
+        assert hard_normalize_unicode(text) == expected
 
     def test_unicode_nfkc(self):
         """NFKC normalization should be applied."""
-        assert normalize_text("\uff21") == "A"
-        assert normalize_text("x\u00b2") == "x2"
+        assert hard_normalize_unicode("\uff21") == "A"
+        assert hard_normalize_unicode("x\u00b2") == "x2"
 
     def test_multiple_spaces_collapsed(self):
         """Multiple consecutive spaces should collapse to one."""
-        assert normalize_text("hello    world") == "hello world"
-        assert normalize_text("a  b   c    d") == "a b c d"
+        assert hard_normalize_unicode("hello    world") == "hello world"
+        assert hard_normalize_unicode("a  b   c    d") == "a b c d"
 
     def test_empty_string(self):
         """Empty string should return empty."""
-        assert normalize_text("") == ""
+        assert hard_normalize_unicode("") == ""
 
     def test_whitespace_only(self):
         """Whitespace-only string should return empty."""
-        assert normalize_text("   \n\t  ") == ""
+        assert hard_normalize_unicode("   \n\t  ") == ""
+
+    def test_normalize_text_is_alias(self):
+        """normalize_text should be an alias for hard_normalize_unicode."""
+        assert normalize_text is hard_normalize_unicode
+
+
+class TestLightNormalizeText:
+    """Test light_normalize_text (NFC + zero-width + spaces only)."""
+
+    def test_nfc_normalization(self):
+        """NFC composes decomposed characters."""
+        # e + combining acute -> precomposed \u00e9
+        assert light_normalize_text("e\u0301") == "\u00e9"
+
+    def test_preserves_fullwidth(self):
+        """NFC does not decompose compatibility characters."""
+        assert light_normalize_text("\uff21") == "\uff21"
+
+    def test_removes_zero_width(self):
+        """Zero-width characters should be removed."""
+        assert light_normalize_text("hello\u200bworld") == "helloworld"
+
+    def test_normalizes_spaces(self):
+        """Non-breaking and other spaces should become regular spaces."""
+        assert light_normalize_text("hello\u00a0world") == "hello world"
+
+    def test_collapses_multiple_spaces(self):
+        """Multiple spaces should collapse to one."""
+        assert light_normalize_text("hello   world") == "hello world"
+
+    def test_strips_whitespace(self):
+        """Leading/trailing spaces should be stripped."""
+        assert light_normalize_text("  hello  ") == "hello"
+
+    def test_preserves_hyphens(self):
+        """Hyphens should NOT be normalized."""
+        assert light_normalize_text("word\u2014another") == "word\u2014another"
+        assert light_normalize_text("pages 1\u2013 10") == "pages 1\u2013 10"
+
+    def test_preserves_quotes(self):
+        """Quotes should NOT be normalized."""
+        assert light_normalize_text("\u201cHello\u201d") == "\u201cHello\u201d"
+
+    def test_preserves_newlines_tabs(self):
+        """Newlines and tabs should NOT be converted to spaces."""
+        # light_normalize_text doesn't do tab/newline -> space
+        assert light_normalize_text("hello\tworld") == "hello\tworld"
+
+    def test_empty_string(self):
+        """Empty string should return empty."""
+        assert light_normalize_text("") == ""
 
 
 class TestToCharTokens:
