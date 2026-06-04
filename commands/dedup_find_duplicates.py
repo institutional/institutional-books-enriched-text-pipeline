@@ -15,23 +15,25 @@ import ctypes
 import json
 import mmap
 import os
-import subprocess
 import tempfile
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 import click
+import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
 from utils.atomic_write import atomic_write_json
-from utils.simhash_fast import extract_bands, hamming_distance
+from utils.simhash import BAND_BITS, NUM_BANDS
+from utils.simhash_fast import hamming_distance
 from utils.unionfind import UnionFindInt
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
+    from typing import Iterator
 
 # Use C++ extension for fast bucket processing when available
 _cpp_bucket_module = None
@@ -118,106 +120,75 @@ def _process_bucket_batch_mmap(
 
 
 # ============================================================================
-# External sort helpers
+# Per-band in-memory sort
 # ============================================================================
 
 
-def _write_band_entries(
-    records_iter: Iterator[tuple[int, int]],
-    output_path: Path,
-    total: int | None = None,
-) -> None:
+def _extract_band_values(
+    hashes_lo: np.ndarray, hashes_hi: np.ndarray, band_idx: int
+) -> np.ndarray:
     """
-    Write band entries to a tab-separated file for external sorting.
-
-    Format: band_idx<TAB>band_value<TAB>doc_idx
-
-    Rationale:
-        For large collections, the band entries themselves are too large to
-        fit in memory. We write them to disk instead. There is IO overhead
-        from using the disk, but this is necessary for large collections.
+    Extract band values for all records using vectorized numpy operations.
 
     Args:
-        records_iter: Iterator yielding (doc_idx, hash_value) tuples
-        output_path: Path to write the TSV file
-        total: Total count for progress bar (optional)
+        hashes_lo: Array of low 64 bits of each hash (uint64)
+        hashes_hi: Array of high 64 bits of each hash (uint64)
+        band_idx: Which band to extract (0-5)
+
+    Returns:
+        Array of band values (uint32)
     """
-    with open(output_path, "w") as f:
-        for doc_idx, hash_val in tqdm(records_iter, total=total, desc="Writing bands"):
-            bands = extract_bands(hash_val)
-            for band_idx, band_value in enumerate(bands):
-                f.write(f"{band_idx}\t{band_value}\t{doc_idx}\n")
+    offset = sum(BAND_BITS[:band_idx])
+    bits = BAND_BITS[band_idx]
+    mask = np.uint64((1 << bits) - 1)
+
+    if offset + bits <= 64:
+        return ((hashes_lo >> np.uint64(offset)) & mask).astype(np.uint32)
+    elif offset >= 64:
+        hi_offset = offset - 64
+        return ((hashes_hi >> np.uint64(hi_offset)) & mask).astype(np.uint32)
+    else:
+        # Spans low and high
+        bits_from_lo = 64 - offset
+        bits_from_hi = bits - bits_from_lo
+        lo_part = (hashes_lo >> np.uint64(offset)).astype(np.uint64)
+        hi_mask = np.uint64((1 << bits_from_hi) - 1)
+        hi_part = (hashes_hi & hi_mask).astype(np.uint64)
+        combined = (lo_part | (hi_part << np.uint64(bits_from_lo))) & mask
+        return combined.astype(np.uint32)
 
 
-def _external_sort(input_path: Path, output_path: Path, temp_dir: Path) -> None:
+def _buckets_from_sorted_keys(
+    sorted_keys: np.ndarray, n_records: int
+) -> Iterator[list[int]]:
     """
-    Sort band entries file using unix sort (external merge sort).
+    Scan a sorted array of packed (band_value << 32 | doc_idx) keys and yield
+    buckets (groups of doc_indices sharing the same band_value) with 2+ members.
 
     Args:
-        input_path: Path to unsorted TSV file
-        output_path: Path for sorted output
-        temp_dir: Directory for sort temp files
-    """
-    cmd = [
-        "sort",
-        "-t\t",
-        "-k1,1n",  # Sort by band_idx (numeric)
-        "-k2,2n",  # Then by band_value (numeric)
-        f"-T{temp_dir}",
-        "-S",
-        "16G",  # Use up to 16GB for sort buffer
-        "-o",
-        str(output_path),
-        str(input_path),
-    ]
-    logger.info(f"Running external sort: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"Sort command failed: {' '.join(cmd)}\nStderr: {result.stderr}")
-
-
-def _stream_buckets(
-    sorted_path: Path, pbar: tqdm | None = None
-) -> Iterator[tuple[tuple[int, int], list[int]]]:
-    """
-    Stream through sorted band file, yielding buckets.
-
-    Args:
-        sorted_path: Path to sorted TSV file
-        pbar: Optional tqdm progress bar (unit="B") to update with bytes read
+        sorted_keys: Sorted uint64 array of packed keys
+        n_records: Total number of records
 
     Yields:
-        (band_key, doc_indices) tuples for buckets with 2+ documents
+        Lists of doc_indices that share the same band value
     """
-    current_key: tuple[int, int] | None = None
-    current_docs: list[int] = []
-    bytes_since_yield = 0
+    band_values = (sorted_keys >> np.uint64(32)).astype(np.uint32)
+    doc_indices = (sorted_keys & np.uint64(0xFFFFFFFF)).astype(np.uint32)
 
-    with open(sorted_path, "rb") as f:
-        for line in f:
-            bytes_since_yield += len(line)
-            parts = line.rstrip(b"\n").split(b"\t")
-            band_idx = int(parts[0])
-            band_value = int(parts[1])
-            doc_idx = int(parts[2])
-            key = (band_idx, band_value)
+    # Find boundaries where band_value changes
+    changes = np.flatnonzero(np.diff(band_values)) + 1
+    starts = np.empty(len(changes) + 1, dtype=np.intp)
+    starts[0] = 0
+    starts[1:] = changes
 
-            if key != current_key:
-                if current_key is not None and len(current_docs) >= 2:
-                    if pbar is not None:
-                        pbar.update(bytes_since_yield)
-                        bytes_since_yield = 0
-                    yield current_key, current_docs
-                current_key = key
-                current_docs = [doc_idx]
-            else:
-                current_docs.append(doc_idx)
+    ends = np.empty(len(changes) + 1, dtype=np.intp)
+    ends[:-1] = changes
+    ends[-1] = n_records
 
-    # Yield the last bucket
-    if current_key is not None and len(current_docs) >= 2:
-        if pbar is not None:
-            pbar.update(bytes_since_yield)
-        yield current_key, current_docs
+    for i in range(len(starts)):
+        size = ends[i] - starts[i]
+        if size >= 2:
+            yield doc_indices[starts[i] : ends[i]].tolist()
 
 
 def find_duplicates(
@@ -231,11 +202,12 @@ def find_duplicates(
     resume: bool = False,
 ) -> None:
     """
-    Find duplicate paragraphs across all shards using LSH with external sort.
+    Find duplicate paragraphs across all shards using LSH with per-band in-memory sort.
 
     NOTE:
-        Memory usage: 16 bytes per paragraph (hash array) + 8 bytes per paragraph
-        (union-find) + sort buffer. For 1B paragraphs: approx 40GB.
+        Memory usage: 16 bytes per paragraph (hash arrays) + 8 bytes per paragraph
+        (sort buffer per band) + 8 bytes per paragraph (union-find).
+        For 1B paragraphs: approx 32-40GB peak.
 
     Args:
         simhash_files: List of paths to simhash JSONL files
@@ -244,8 +216,9 @@ def find_duplicates(
         workers: Number of parallel workers (default: approx CPU count)
         max_bucket_size: Skip buckets with more documents than this
         benchmark: If True, print timing breakdown
+        temp_dir: Directory for hash file (used by workers for mmap)
+        resume: If True, reuse existing hashes.bin from temp_dir
     """
-    # Don't actually use all CPUs
     cpu_workers = 0
     if os.cpu_count() is not None:
         cpu_workers = os.cpu_count() - 5  # type: ignore
@@ -256,10 +229,10 @@ def find_duplicates(
     t0 = time.perf_counter()
     logger.info(f"Loading simhash records from {len(simhash_files)} files...")
 
-    # Compact book index: store one entry per book instead of one string per paragraph.
     book_ids: list[str] = []
-    book_offsets = array.array("q")  # cumulative paragraph start indices
-    hashes: array.array[int] | None = None if resume else array.array("Q")
+    book_offsets = array.array("q")
+    hashes_lo_list: list[int] = []
+    hashes_hi_list: list[int] = []
 
     n_records = 0
     num_books = 0
@@ -272,19 +245,31 @@ def find_duplicates(
                 book_ids.append(book_id)
                 book_offsets.append(n_records)
                 for h in data["simhashes"]:
+                    hash_int = int(h, 16) if isinstance(h, str) else h
+                    hashes_lo_list.append(hash_int & ((1 << 64) - 1))
+                    hashes_hi_list.append(hash_int >> 64)
                     n_records += 1
-                    if hashes is not None:
-                        hash_int = int(h, 16) if isinstance(h, str) else h
-                        low = hash_int & ((1 << 64) - 1)
-                        high = hash_int >> 64
-                        hashes.append(low)
-                        hashes.append(high)
+
     timings["1_load_records"] = time.perf_counter() - t0
     logger.info(f"Loaded {n_records:,} paragraph records from {num_books:,} books")
 
     if n_records == 0:
         raise ValueError("No records found")
 
+    if n_records > 2**32:
+        raise ValueError(
+            f"Too many records ({n_records:,}) for uint32 doc indices. "
+            "Maximum supported is 4,294,967,295."
+        )
+
+    # Convert to numpy arrays for vectorized band extraction
+    t0 = time.perf_counter()
+    hashes_lo = np.array(hashes_lo_list, dtype=np.uint64)
+    hashes_hi = np.array(hashes_hi_list, dtype=np.uint64)
+    del hashes_lo_list, hashes_hi_list
+    timings["1b_build_numpy"] = time.perf_counter() - t0
+
+    # Write hashes.bin for mmap-based worker verification
     temp_ctx = tempfile.TemporaryDirectory() if temp_dir is None else None
     if temp_ctx is not None:
         temp_path = Path(temp_ctx.name)
@@ -292,89 +277,59 @@ def find_duplicates(
         assert temp_dir is not None
         temp_dir.mkdir(parents=True, exist_ok=True)
         temp_path = temp_dir
-        logger.info(f"Using persistent temp directory: {temp_dir}")
 
     try:
-        bands_unsorted = temp_path / "bands_unsorted.tsv"
-        bands_sorted = temp_path / "bands_sorted.tsv"
         hash_file = temp_path / "hashes.bin"
 
-        if resume:
-            if not bands_sorted.exists():
-                raise RuntimeError(f"Resume failed: {bands_sorted} not found")
-            if not hash_file.exists():
-                raise RuntimeError(f"Resume failed: {hash_file} not found")
-            logger.info("Resuming from existing bands_sorted.tsv and hashes.bin")
+        if resume and hash_file.exists():
+            logger.info("Resuming: reusing existing hashes.bin")
             n_hashes = hash_file.stat().st_size // 8
-
-            # Validate n_hashes matches expected record count
             if n_hashes != n_records * 2:
                 raise RuntimeError(
                     f"Resume failed: hashes.bin has {n_hashes // 2:,} records "
-                    + f"but simhash files have {n_records:,}"
+                    f"but simhash files have {n_records:,}"
                 )
         else:
-            assert hashes is not None
-
-            # Phase 2: Write band entries to temp file
             t0 = time.perf_counter()
-            logger.info("Writing band entries to disk...")
-
-            def record_iter() -> Iterator[tuple[int, int]]:
-                assert hashes is not None
-                for idx in range(n_records):
-                    h = hashes[idx * 2] | (hashes[idx * 2 + 1] << 64)
-                    yield idx, h
-
-            _write_band_entries(record_iter(), bands_unsorted, total=n_records)
-            timings["2_write_bands"] = time.perf_counter() - t0
-
-            # Phase 3: External sort
-            t0 = time.perf_counter()
-            logger.info("Sorting band entries (external sort)...")
-            _external_sort(bands_unsorted, bands_sorted, temp_path)
-            timings["3_external_sort"] = time.perf_counter() - t0
-
-            # Remove unsorted file
-            bands_unsorted.unlink()
-
             logger.info(f"Writing hashes to {hash_file}...")
-            with open(hash_file, "wb") as f:
-                hashes.tofile(f)
-            n_hashes = len(hashes)
+            # Interleave lo/hi into flat array: [lo0, hi0, lo1, hi1, ...]
+            interleaved = np.empty(n_records * 2, dtype=np.uint64)
+            interleaved[0::2] = hashes_lo
+            interleaved[1::2] = hashes_hi
+            interleaved.tofile(hash_file)
+            del interleaved
+            timings["2_write_hashes"] = time.perf_counter() - t0
 
-            # Validate hash file was written completely
-            expected_size = n_hashes * 8  # 8 bytes per uint64
-            actual_size = hash_file.stat().st_size
-            if actual_size != expected_size:
-                raise RuntimeError(
-                    f"Hash file incomplete: expected {expected_size} bytes, got {actual_size}"
-                )
+        n_hashes = n_records * 2
 
-            # hashes are no longer necessary in memory
-            del hashes
-
-        # Phase 4: Process buckets with mmap'd hashes
+        # Phase 2-3: Per-band sort and bucket extraction
         t0 = time.perf_counter()
-        logger.info(f"Processing buckets with {num_workers} workers...")
+        logger.info(f"Processing {NUM_BANDS} bands with in-memory sort...")
         uf = UnionFindInt(n_records)
         duplicates_found = 0
         buckets_skipped = 0
-        max_pending = num_workers * 2
-        chunk_size = 10_000
+        total_buckets = 0
 
-        # Diagnostic timing for bottleneck analysis
+        # Diagnostic timing
+        time_sort = 0.0
         time_wait = 0.0
         time_process = 0.0
         time_submit = 0.0
 
+        max_pending = num_workers * 2
+        chunk_size = 10_000
+
         def process_result(future: Future[list[tuple[int, int]]]) -> None:
-            """Process a completed future's results."""
             nonlocal duplicates_found
             verified_pairs = future.result()
             for d1, d2 in verified_pairs:
                 if uf.union(d1, d2):
                     duplicates_found += 1
+
+        skipped_buckets_file = output_file.with_suffix(".skipped_buckets.jsonl")
+        skipped_f = open(skipped_buckets_file, "w")
+
+        doc_indices_arr = np.arange(n_records, dtype=np.uint64)
 
         with ProcessPoolExecutor(
             max_workers=num_workers,
@@ -384,10 +339,8 @@ def find_duplicates(
             pending: set[Future[list[tuple[int, int]]]] = set()
             chunks_submitted = 0
             chunks_completed = 0
-            current_chunk: list[list[int]] = []
 
-            def submit_chunk() -> None:
-                """Submit the current chunk to the executor."""
+            def submit_chunk(current_chunk: list[list[int]]) -> None:
                 nonlocal chunks_submitted
                 if not current_chunk:
                     return
@@ -399,7 +352,6 @@ def find_duplicates(
                 chunks_submitted += 1
 
             def drain_completed(block: bool = False) -> None:
-                """Process completed futures."""
                 nonlocal chunks_completed, time_process
                 if not pending:
                     return
@@ -409,40 +361,37 @@ def find_duplicates(
                     done = {f for f in pending if f.done()}
                 for future in done:
                     pending.discard(future)
-                    t_process = time.perf_counter()
+                    t_proc = time.perf_counter()
                     process_result(future)
                     chunks_completed += 1
-                    time_process += time.perf_counter() - t_process
+                    time_process += time.perf_counter() - t_proc
 
-            logger.info("Streaming buckets into workers...")
-            total_buckets = 0
-            sorted_file_size = bands_sorted.stat().st_size
+            for band_idx in range(NUM_BANDS):
+                t_band = time.perf_counter()
 
-            with tqdm(
-                desc="Processing buckets",
-                total=sorted_file_size,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as pbar:
+                # Extract band values (vectorized)
+                band_values = _extract_band_values(hashes_lo, hashes_hi, band_idx)
 
-                def drain_and_update(block: bool = False) -> None:
-                    before = chunks_completed
-                    drain_completed(block=block)
-                    if chunks_completed > before:
-                        pbar.set_postfix(chunks=chunks_completed)
+                # Pack (band_value, doc_idx) into uint64 for single-key sort
+                keys = (band_values.astype(np.uint64) << np.uint64(32)) | doc_indices_arr
+                del band_values
 
-                skipped_buckets_file = output_file.with_suffix(".skipped_buckets.jsonl")
-                skipped_f = open(skipped_buckets_file, "w")
+                keys.sort()
+                t_sort_end = time.perf_counter()
+                time_sort += t_sort_end - t_band
 
-                for band_key, doc_indices in _stream_buckets(bands_sorted, pbar):
+                # Extract buckets from sorted keys
+                current_chunk: list[list[int]] = []
+                band_buckets = 0
+                band_skipped = 0
+
+                for doc_indices in _buckets_from_sorted_keys(keys, n_records):
                     if len(doc_indices) > max_bucket_size:
-                        buckets_skipped += 1
+                        band_skipped += 1
                         skipped_f.write(
                             json.dumps(
                                 {
-                                    "band_idx": band_key[0],
-                                    "band_value": band_key[1],
+                                    "band_idx": band_idx,
                                     "size": len(doc_indices),
                                     "doc_indices": doc_indices,
                                 }
@@ -450,57 +399,67 @@ def find_duplicates(
                             + "\n"
                         )
                         continue
-                    total_buckets += 1
+                    band_buckets += 1
                     current_chunk.append(doc_indices)
 
                     if len(current_chunk) >= chunk_size:
-                        # If too many pending, wait for one to complete
                         if len(pending) >= max_pending:
-                            t_wait = time.perf_counter()
-                            drain_and_update(block=True)
-                            time_wait += time.perf_counter() - t_wait
+                            t_w = time.perf_counter()
+                            drain_completed(block=True)
+                            time_wait += time.perf_counter() - t_w
 
-                        t_submit = time.perf_counter()
-                        submit_chunk()
-                        time_submit += time.perf_counter() - t_submit
+                        t_s = time.perf_counter()
+                        submit_chunk(current_chunk)
+                        time_submit += time.perf_counter() - t_s
                         current_chunk = []
 
-                # Submit final partial chunk
+                # Submit remaining buckets for this band
                 if current_chunk:
                     if len(pending) >= max_pending:
-                        t_wait = time.perf_counter()
-                        drain_and_update(block=True)
-                        time_wait += time.perf_counter() - t_wait
-                    t_submit = time.perf_counter()
-                    submit_chunk()
-                    time_submit += time.perf_counter() - t_submit
+                        t_w = time.perf_counter()
+                        drain_completed(block=True)
+                        time_wait += time.perf_counter() - t_w
+                    t_s = time.perf_counter()
+                    submit_chunk(current_chunk)
+                    time_submit += time.perf_counter() - t_s
 
-                # Drain remaining futures
-                while pending:
-                    t_wait = time.perf_counter()
-                    drain_and_update(block=True)
-                    time_wait += time.perf_counter() - t_wait
+                del keys
+                total_buckets += band_buckets
+                buckets_skipped += band_skipped
 
-            skipped_f.close()
-            if buckets_skipped > 0:
                 logger.info(
-                    f"Wrote {buckets_skipped:,} oversized buckets to {skipped_buckets_file}"
+                    f"  Band {band_idx}: {band_buckets:,} buckets, "
+                    f"{band_skipped:,} skipped, "
+                    f"sort {t_sort_end - t_band:.1f}s"
                 )
-            else:
-                skipped_buckets_file.unlink(missing_ok=True)
 
-            logger.info(
-                f"Streamed {total_buckets:,} buckets in {chunks_submitted:,} chunks "
-                f"({buckets_skipped:,} oversized buckets skipped)"
-            )
+            # Drain all remaining futures
+            while pending:
+                t_w = time.perf_counter()
+                drain_completed(block=True)
+                time_wait += time.perf_counter() - t_w
 
-        timings["4_process_buckets"] = time.perf_counter() - t0
+        skipped_f.close()
+        if buckets_skipped > 0:
+            logger.info(f"Wrote {buckets_skipped:,} oversized buckets to {skipped_buckets_file}")
+        else:
+            skipped_buckets_file.unlink(missing_ok=True)
+
+        timings["2_sort_and_buckets"] = time.perf_counter() - t0
+
+        logger.info(
+            f"Processed {total_buckets:,} buckets in {chunks_submitted:,} chunks "
+            f"({buckets_skipped:,} oversized buckets skipped)"
+        )
 
         if benchmark:
-            total_inner = time_wait + time_process + time_submit
+            total_inner = time_sort + time_wait + time_process + time_submit
             if total_inner > 0:
                 logger.info("-" * 40)
-                logger.info("Phase 4 breakdown (main process):")
+                logger.info("Sort & bucket processing breakdown:")
+                logger.info(
+                    f"  numpy sort:       {time_sort:.2f}s ({100 * time_sort / total_inner:.1f}%)"
+                )
                 logger.info(
                     f"  wait (workers):   {time_wait:.2f}s ({100 * time_wait / total_inner:.1f}%)"
                 )
@@ -514,6 +473,9 @@ def find_duplicates(
 
         if buckets_skipped > 0:
             logger.info(f"Skipped {buckets_skipped:,} buckets exceeding {max_bucket_size:,} docs")
+
+        # Free hash arrays before cluster building
+        del hashes_lo, hashes_hi, doc_indices_arr
     finally:
         if temp_ctx is not None:
             temp_ctx.cleanup()
@@ -609,13 +571,7 @@ def find_duplicates(
     "--temp-dir",
     type=click.Path(path_type=Path),
     default=None,
-    help="Persistent directory for temp files (bands TSV, hashes). Not cleaned up.",
-)
-@click.option(
-    "--resume",
-    is_flag=True,
-    default=False,
-    help="Skip phases 2-3; reuse bands_sorted.tsv and hashes.bin from --temp-dir.",
+    help="Directory for temp files (hashes.bin for worker mmap). Not cleaned up if specified.",
 )
 def main(
     input_dir: Path,
@@ -624,16 +580,15 @@ def main(
     workers: int | None,
     benchmark: bool,
     temp_dir: Path | None,
-    resume: bool,
 ) -> None:
     """
     Find duplicate paragraphs across all shards using LSH.
 
-    Reads all simhash files from input directory, builds an LSH index using
-    external sort for memory efficiency, finds candidate pairs, verifies them,
+    Reads all simhash files from input directory, performs per-band in-memory
+    sorting to find candidate pairs, verifies them with Hamming distance,
     and outputs clusters.
 
-    Note: expect at least 40GB or memory for 1B paragraphs.
+    Note: expect at least 32-40GB of memory for 1B paragraphs.
 
     Output format (clusters.json):
 
@@ -651,9 +606,6 @@ def main(
             --output-file DATA/dedup/clusters.json \\
             --benchmark
     """
-    if resume and temp_dir is None:
-        raise click.ClickException("--resume requires --temp-dir")
-
     simhash_files = sorted(input_dir.glob("*.simhashes.jsonl"))
     if not simhash_files:
         raise click.ClickException(f"No *.simhashes.jsonl files found in {input_dir}")
@@ -667,7 +619,6 @@ def main(
         workers=workers,
         benchmark=benchmark,
         temp_dir=temp_dir,
-        resume=resume,
     )
 
 
