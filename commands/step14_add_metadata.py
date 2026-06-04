@@ -1,13 +1,11 @@
 """
 step14_add_metadata.py - Compute and add per-book metadata statistics.
 
-Compute similar metadata
-
 Computes for middlematter only:
 - Basic text stats: token_count, char_count, word_count, sentence_count, etc.
 - N-gram stats: bigram/trigram counts (total and unique)
 - Tokenizability: o200k_base tokenizability ratio
-- Perplexity stats: min, max, median, avg, and percentiles (if computed)
+- BPB stats: min, max, median, avg, and percentiles (if computed)
 """
 
 import json
@@ -17,39 +15,35 @@ import click
 from loguru import logger
 
 from const.types import BookJSON
-from library.metadata.perplexity_stats import compute_perplexity_stats
+from library.metadata.bpb_stats import compute_bpb_stats
 from library.metadata.text_stats import compute_text_stats
-from utils.jsonl_io import load_perplexity_map
+from utils.jsonl_io import load_bpb_map
 
 
 def add_metadata(
     book: BookJSON,
-    perp_map: dict[str, list[float]],
+    bpb_map: dict[str, list[float]],
 ) -> BookJSON:
     """
     Compute and add metadata statistics to a book.
 
     Args:
         book: Book dictionary with middlematter_sentences.
-        perp_map: Map of book_id to perplexity values.
+        bpb_map: Map of book_id to BPB values.
 
     Returns:
         Book with metadata field added.
     """
     book_id = book.get("barcode_src", "UNKNOWN")
 
-    # Compute text statistics
     text_stats = compute_text_stats(book)
 
-    # Get perplexity statistics if available
-    perplexities = perp_map.get(book_id, [])
-    perp_stats = compute_perplexity_stats(perplexities) if perplexities else {}
+    bpb_values = bpb_map.get(book_id, [])
+    bpb_stats = compute_bpb_stats(bpb_values) if bpb_values else {}
 
-    # Get language distribution (computed in step 13)
     lang_dist = book.get("language_distribution_gen", {"languages": [], "proportion": []})
 
-    # Combine all metadata
-    metadata = {**text_stats, **perp_stats, **lang_dist}
+    metadata = {**text_stats, **bpb_stats, **lang_dist}
 
     book["metadata"] = metadata
     return book
@@ -69,34 +63,33 @@ def add_metadata(
     help="Output JSONL file with metadata added",
 )
 @click.option(
-    "--perplexity-file",
+    "--bpb-file",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help="Optional .perplexity.jsonl file with perplexity values",
+    help="Optional .bpb.jsonl file with bits-per-byte values",
 )
 def main(
     input_file: Path,
     output_file: Path,
-    perplexity_file: Path | None,
+    bpb_file: Path | None,
 ):
     """
     Compute and add metadata statistics to books.
 
     Reads annotated books and adds a 'metadata' field with text statistics,
-    n-gram counts, tokenizability, and perplexity statistics.
+    n-gram counts, tokenizability, and BPB statistics.
 
     Example:
         python -m commands.step14_add_metadata \\
             --input-file DATA/shards/annotated/shard0001.annotated.jsonl \\
             --output-file DATA/shards/metadata/shard0001.metadata.jsonl \\
-            --perplexity-file DATA/perplexity/shard0001.perplexity.jsonl
+            --bpb-file DATA/bpb/shard0001.bpb.jsonl
     """
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load perplexity map
-    perp_map = load_perplexity_map(perplexity_file)
-    if perp_map:
-        logger.info(f"Loaded perplexities for {len(perp_map)} books")
+    bpb_map = load_bpb_map(bpb_file)
+    if bpb_map:
+        logger.info(f"Loaded BPB values for {len(bpb_map)} books")
 
     books_processed = 0
     books_failed = 0
@@ -107,7 +100,7 @@ def main(
             book_id = book.get("barcode_src", "UNKNOWN")
 
             try:
-                with_metadata = add_metadata(book, perp_map)
+                with_metadata = add_metadata(book, bpb_map)
                 f_out.write(json.dumps(with_metadata, ensure_ascii=False) + "\n")
                 books_processed += 1
             except Exception as e:

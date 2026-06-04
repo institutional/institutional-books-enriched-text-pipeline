@@ -54,8 +54,8 @@ class TestStep14CLI:
         assert output_books[0]["metadata"]["token_count"] == 100
 
     @patch("commands.step14_add_metadata.compute_text_stats")
-    def test_includes_perplexity_stats(self, mock_compute_stats, tmp_path: Path):
-        """Test that perplexity statistics are included when file is provided."""
+    def test_includes_bpb_stats(self, mock_compute_stats, tmp_path: Path):
+        """Test that BPB statistics are included when file is provided."""
         mock_compute_stats.return_value = {
             "token_count": 50,
             "char_count": 200,
@@ -72,7 +72,7 @@ class TestStep14CLI:
 
         input_file = tmp_path / "input.jsonl"
         output_file = tmp_path / "output.jsonl"
-        perp_file = tmp_path / "perplexity.jsonl"
+        bpb_file = tmp_path / "bpb.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -81,8 +81,8 @@ class TestStep14CLI:
         }
         input_file.write_text(json.dumps(book))
 
-        perp_record = {"book_id": "book1", "perplexities": [10.0, 20.0, 30.0]}
-        perp_file.write_text(json.dumps(perp_record))
+        bpb_record = {"book_id": "book1", "bpb_values": [0.8, 1.2, 1.6]}
+        bpb_file.write_text(json.dumps(bpb_record))
 
         runner = CliRunner()
         result = runner.invoke(
@@ -90,17 +90,17 @@ class TestStep14CLI:
             [
                 "--input-file", str(input_file),
                 "--output-file", str(output_file),
-                "--perplexity-file", str(perp_file),
+                "--bpb-file", str(bpb_file),
             ],
         )
 
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        assert "perplexity_min" in output_book["metadata"]
-        assert "perplexity_max" in output_book["metadata"]
-        assert output_book["metadata"]["perplexity_min"] == 10.0
-        assert output_book["metadata"]["perplexity_max"] == 30.0
+        assert "bpb_min" in output_book["metadata"]
+        assert "bpb_max" in output_book["metadata"]
+        assert output_book["metadata"]["bpb_min"] == 0.8
+        assert output_book["metadata"]["bpb_max"] == 1.6
 
     @patch("commands.step14_add_metadata.compute_text_stats")
     def test_processes_multiple_books(self, mock_compute_stats, tmp_path: Path):

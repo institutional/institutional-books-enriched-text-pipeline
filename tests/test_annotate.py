@@ -56,17 +56,17 @@ class TestBuildEndmatterPageTag:
 
 
 class TestBuildParagraphTag:
-    def test_paragraph_with_perplexity(self):
+    def test_paragraph_with_bpb(self):
         result = build_paragraph_tag("Some text.", 12.5)
-        assert result == '<p data-perplexity="12.5">Some text.</p>'
+        assert result == '<p data-bpb="12.5">Some text.</p>'
 
-    def test_paragraph_without_perplexity(self):
+    def test_paragraph_without_bpb(self):
         result = build_paragraph_tag("Some text.")
         assert result == "<p>Some text.</p>"
 
-    def test_perplexity_formatting(self):
+    def test_bpb_formatting(self):
         result = build_paragraph_tag("Text", 8.123456)
-        assert 'data-perplexity="8.1"' in result
+        assert 'data-bpb="8.1"' in result
 
     def test_escapes_content(self):
         result = build_paragraph_tag("A < B", 5.0)
@@ -76,19 +76,19 @@ class TestBuildParagraphTag:
         result = build_paragraph_tag("Rep text.", 9.2, "eng", representative_cluster="book1:10")
         assert "data-representative" in result
         assert 'data-clusterid="book1:10"' in result
-        assert 'data-perplexity="9.2"' in result
+        assert 'data-bpb="9.2"' in result
         assert 'data-language="eng"' in result
 
 
 class TestBuildSectionTag:
-    def test_section_with_perplexity(self):
+    def test_section_with_bpb(self):
         content = "<p>P1</p>"
         result = build_section_tag(content, 10.5)
-        assert '<section data-perplexity="10.5">' in result
+        assert '<section data-bpb="10.5">' in result
         assert "</section>" in result
         assert content in result
 
-    def test_section_without_perplexity(self):
+    def test_section_without_bpb(self):
         content = "<p>P1</p>"
         result = build_section_tag(content)
         assert "<section>" in result
@@ -172,26 +172,26 @@ class TestAnnotateMiddlematter:
         assert "<p" in result
         assert "Hello world.</p>" in result
 
-    def test_with_perplexity(self):
+    def test_with_bpb(self):
         book = {
             "barcode_src": "test",
             "middlematter_sentences": ["Content here."],
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
         }
-        result, _ = annotate_middlematter(book, perplexities=[12.5])
-        assert 'data-perplexity="12.5"' in result
+        result, _ = annotate_middlematter(book, bpb_values=[12.5])
+        assert 'data-bpb="12.5"' in result
 
-    def test_invalid_perplexity_excluded(self):
+    def test_invalid_bpb_excluded(self):
         book = {
             "barcode_src": "test",
             "middlematter_sentences": ["Short."],
             "subtopic_paragraph_start_indices": [0],
             "subtopic_section_start_indices": [0],
         }
-        # -1 indicates perplexity couldn't be computed
-        result, _ = annotate_middlematter(book, perplexities=[-1.0])
-        assert "data-perplexity=" not in result
+        # -1 indicates bpb couldn't be computed
+        result, _ = annotate_middlematter(book, bpb_values=[-1.0])
+        assert "data-bpb=" not in result
 
     def test_representative_paragraph(self):
         book = {
@@ -349,9 +349,9 @@ class TestBuildParagraphTagWithLanguage:
         result = build_paragraph_tag("Text", language="eng")
         assert result == '<p data-language="eng">Text</p>'
 
-    def test_paragraph_with_perplexity_and_language(self):
-        result = build_paragraph_tag("Text", perplexity=10.5, language="deu")
-        assert result == '<p data-perplexity="10.5" data-language="deu">Text</p>'
+    def test_paragraph_with_bpb_and_language(self):
+        result = build_paragraph_tag("Text", bpb=10.5, language="deu")
+        assert result == '<p data-bpb="10.5" data-language="deu">Text</p>'
 
 
 class TestAnnotateMiddlematterWithLanguage:

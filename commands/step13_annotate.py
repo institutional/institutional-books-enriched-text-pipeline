@@ -5,7 +5,7 @@ This step produces annotations from earlier computation:
 
 1. Annotates frontmatter/backmatter pages with endmatter classification tags
 2. Annotates middlematter with section/paragraph/duplicate tags
-3. Includes perplexity scores from optional .perplexity.jsonl files
+3. Includes BPB scores from optional .bpb.jsonl files
 
 Produces:
 - annotated_frontmatter: List of tagged page strings
@@ -27,13 +27,13 @@ from library.annotate.endmatter import (
     load_em_subclassifier,
 )
 from library.annotate.middlematter import annotate_middlematter
-from utils.jsonl_io import load_perplexity_map
+from utils.jsonl_io import load_bpb_map
 
 
 def annotate_book(
     book: BookJSON,
     em_classifier,
-    perp_map: dict[str, list[float]],
+    bpb_map: dict[str, list[float]],
 ) -> BookJSON:
     """
     Annotate a single book with semantic tags.
@@ -41,7 +41,7 @@ def annotate_book(
     Args:
         book: Book dictionary with frontmatter, middlematter, backmatter.
         em_classifier: Endmatter subclassifier model.
-        perp_map: Map of book_id to perplexity values.
+        bpb_map: Map of book_id to BPB values.
 
     Returns:
         Book with annotated_frontmatter, annotated_middlematter, annotated_backmatter.
@@ -50,19 +50,15 @@ def annotate_book(
     if book_id == "UNKNOWN":
         raise ValueError("Unknown book in annotation")
 
-    # Get perplexities for this book if available
-    perplexities = perp_map.get(book_id)
+    bpb_values = bpb_map.get(book_id)
 
-    # Annotate frontmatter
     frontmatter = book.get("frontmatter", [])
     book["annotated_frontmatter"] = annotate_frontmatter(frontmatter, em_classifier)
 
-    # Annotate middlematter
-    annotated_mm, lang_dist = annotate_middlematter(book, perplexities)
+    annotated_mm, lang_dist = annotate_middlematter(book, bpb_values)
     book["annotated_middlematter"] = annotated_mm
     book["language_distribution_gen"] = lang_dist
 
-    # Annotate backmatter
     backmatter = book.get("backmatter", [])
     book["annotated_backmatter"] = annotate_backmatter(backmatter, em_classifier)
 
@@ -83,10 +79,10 @@ def annotate_book(
     help="Output JSONL file for annotated books",
 )
 @click.option(
-    "--perplexity-file",
+    "--bpb-file",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help="Optional .perplexity.jsonl file with perplexity values",
+    help="Optional .bpb.jsonl file with bits-per-byte values",
 )
 @click.option(
     "--config-file",
@@ -97,7 +93,7 @@ def annotate_book(
 def main(
     input_file: Path,
     output_file: Path,
-    perplexity_file: Path | None,
+    bpb_file: Path | None,
     config_file: Path | None,
 ):
     """
@@ -110,21 +106,19 @@ def main(
         python -m commands.step13_annotate \\
             --input-file DATA/shards/processed/shard0001.complete.jsonl \\
             --output-file DATA/shards/annotated/shard0001.annotated.jsonl \\
-            --perplexity-file DATA/perplexity/shard0001.perplexity.jsonl \\
+            --bpb-file DATA/bpb/shard0001.bpb.jsonl \\
             --config-file config.yaml
     """
     config = load_config(config_file) if config_file else PipelineConfig()
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load models
     em_classifier = load_em_subclassifier(config.model_paths.em_subclassifier)
     logger.info(f"Loaded em_subclassifier from {config.model_paths.em_subclassifier}")
 
-    # Load perplexity map
-    perp_map = load_perplexity_map(perplexity_file)
-    if perp_map:
-        logger.info(f"Loaded perplexities for {len(perp_map)} books")
+    bpb_map = load_bpb_map(bpb_file)
+    if bpb_map:
+        logger.info(f"Loaded BPB values for {len(bpb_map)} books")
 
     books_processed = 0
     books_failed = 0
@@ -135,7 +129,7 @@ def main(
             book_id = book.get("barcode_src", "UNKNOWN")
 
             try:
-                annotated = annotate_book(book, em_classifier, perp_map)
+                annotated = annotate_book(book, em_classifier, bpb_map)
                 f_out.write(json.dumps(annotated, ensure_ascii=False) + "\n")
                 books_processed += 1
             except Exception as e:

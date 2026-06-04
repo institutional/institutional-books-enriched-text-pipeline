@@ -1,4 +1,4 @@
-"""Tests for commands/compute_perplexities.py CLI."""
+"""Tests for commands/compute_bpb.py CLI."""
 
 import json
 from pathlib import Path
@@ -6,24 +6,24 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from commands.compute_perplexities import main as compute_perplexities_main
+from commands.compute_bpb import main as compute_bpb_main
 
 
-class TestComputePerplexitiesCLI:
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+class TestComputeBPBCLI:
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_processes_books(self, mock_compute, mock_load_model, tmp_path: Path):
-        """Test CLI processes books and outputs perplexity records."""
+        """Test CLI processes books and outputs BPB records."""
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
         mock_compute.return_value = {
             "book_id": "book1",
-            "perplexities": [10.5, 20.3],
+            "bpb_values": [0.85, 1.23],
         }
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -34,7 +34,7 @@ class TestComputePerplexitiesCLI:
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
@@ -46,24 +46,24 @@ class TestComputePerplexitiesCLI:
         ]
         assert len(output_records) == 1
         assert output_records[0]["book_id"] == "book1"
-        assert output_records[0]["perplexities"] == [10.5, 20.3]
+        assert output_records[0]["bpb_values"] == [0.85, 1.23]
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_output_format_matches_expected_structure(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
-        """Test output JSONL format has {book_id, perplexities} structure."""
+        """Test output JSONL format has {book_id, bpb_values} structure."""
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
         mock_compute.side_effect = [
-            {"book_id": "book1", "perplexities": [12.5, 45.2, 8.7]},
-            {"book_id": "book2", "perplexities": [5.0]},
+            {"book_id": "book1", "bpb_values": [0.82, 1.45, 0.67]},
+            {"book_id": "book2", "bpb_values": [0.91]},
         ]
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
 
         books = [
             {
@@ -81,7 +81,7 @@ class TestComputePerplexitiesCLI:
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
@@ -92,35 +92,33 @@ class TestComputePerplexitiesCLI:
         ]
         assert len(output_records) == 2
 
-        # Check structure - should be {book_id, perplexities} records
         for record in output_records:
             assert "book_id" in record
-            assert "perplexities" in record
-            assert isinstance(record["perplexities"], list)
-            # Should NOT contain full book fields
+            assert "bpb_values" in record
+            assert isinstance(record["bpb_values"], list)
             assert "barcode_src" not in record
             assert "middlematter_sentences" not in record
 
         assert output_records[0]["book_id"] == "book1"
-        assert output_records[0]["perplexities"] == [12.5, 45.2, 8.7]
+        assert output_records[0]["bpb_values"] == [0.82, 1.45, 0.67]
         assert output_records[1]["book_id"] == "book2"
-        assert output_records[1]["perplexities"] == [5.0]
+        assert output_records[1]["bpb_values"] == [0.91]
 
     def test_fails_on_missing_input_file(self, tmp_path: Path):
         """Test that CLI fails when input file doesn't exist."""
         input_file = tmp_path / "nonexistent.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code != 0
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_skips_books_with_errors(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -130,14 +128,14 @@ class TestComputePerplexitiesCLI:
         mock_load_model.return_value = (mock_model, mock_tokenizer)
         mock_compute.side_effect = [
             ValueError("No sentences found"),
-            {"book_id": "book2", "perplexities": [5.0]},
+            {"book_id": "book2", "bpb_values": [0.91]},
         ]
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
 
         books = [
-            {"barcode_src": "book1"},  # Missing required fields
+            {"barcode_src": "book1"},
             {
                 "barcode_src": "book2",
                 "middlematter_sentences": ["X."],
@@ -148,22 +146,21 @@ class TestComputePerplexitiesCLI:
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
 
-        # Only successful book should be in output
         output_records = [
             json.loads(line) for line in output_file.read_text().strip().split("\n")
         ]
         assert len(output_records) == 1
         assert output_records[0]["book_id"] == "book2"
-        assert output_records[0]["perplexities"] == [5.0]
+        assert output_records[0]["bpb_values"] == [0.91]
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_creates_output_directory(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -171,10 +168,10 @@ class TestComputePerplexitiesCLI:
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
-        mock_compute.return_value = {"book_id": "book1", "perplexities": [1.0]}
+        mock_compute.return_value = {"book_id": "book1", "bpb_values": [0.8]}
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "nested" / "dir" / "output.perplexity.jsonl"
+        output_file = tmp_path / "nested" / "dir" / "output.bpb.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -185,14 +182,14 @@ class TestComputePerplexitiesCLI:
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
         assert output_file.exists()
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
+    @patch("commands.compute_bpb.load_bpb_model")
     def test_uses_custom_model_from_config(self, mock_load_model, tmp_path: Path):
         """Test that custom model name from config is used."""
         mock_model = MagicMock()
@@ -200,7 +197,7 @@ class TestComputePerplexitiesCLI:
         mock_load_model.return_value = (mock_model, mock_tokenizer)
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
         config_file = tmp_path / "config.yaml"
 
         book = {
@@ -209,16 +206,14 @@ class TestComputePerplexitiesCLI:
             "subtopic_paragraph_start_indices": [0],
         }
         input_file.write_text(json.dumps(book))
-        config_file.write_text("perplexity:\n  model_name: custom/model-name\n")
+        config_file.write_text("bpb:\n  model_name: custom/model-name\n")
 
-        with patch(
-            "commands.compute_perplexities.compute_perplexities_in_book"
-        ) as mock_compute:
-            mock_compute.return_value = {"book_id": "book1", "perplexities": [1.0]}
+        with patch("commands.compute_bpb.compute_bpb_in_book") as mock_compute:
+            mock_compute.return_value = {"book_id": "book1", "bpb_values": [0.8]}
 
             runner = CliRunner()
             runner.invoke(
-                compute_perplexities_main,
+                compute_bpb_main,
                 [
                     "--input-file",
                     str(input_file),
@@ -233,8 +228,8 @@ class TestComputePerplexitiesCLI:
             call_args = mock_load_model.call_args
             assert call_args[0][0] == "custom/model-name"
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_resume_skips_processed_books(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -242,14 +237,12 @@ class TestComputePerplexitiesCLI:
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
-        # Only called for book2 (book1 already processed)
-        mock_compute.return_value = {"book_id": "book2", "perplexities": [20.0]}
+        mock_compute.return_value = {"book_id": "book2", "bpb_values": [1.2]}
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
-        progress_file = tmp_path / "output.perplexity.progress.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
+        progress_file = tmp_path / "output.bpb.progress.jsonl"
 
-        # Create input with 2 books
         books = [
             {
                 "barcode_src": "book1",
@@ -264,13 +257,12 @@ class TestComputePerplexitiesCLI:
         ]
         input_file.write_text("\n".join(json.dumps(b) for b in books))
 
-        # Create progress file with first book already processed
-        progress_records = [{"book_id": "book1", "perplexities": [10.0]}]
+        progress_records = [{"book_id": "book1", "bpb_values": [0.9]}]
         progress_file.write_text("\n".join(json.dumps(r) for r in progress_records) + "\n")
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             [
                 "--input-file", str(input_file),
                 "--output-file", str(output_file),
@@ -281,24 +273,19 @@ class TestComputePerplexitiesCLI:
         assert result.exit_code == 0
         assert output_file.exists()
 
-        # Output should have both books (1 from progress + 1 new)
         output_records = [
             json.loads(line) for line in output_file.read_text().strip().split("\n")
         ]
         assert len(output_records) == 2
 
-        # Verify both books are present
         book_ids = {r["book_id"] for r in output_records}
         assert book_ids == {"book1", "book2"}
 
-        # Progress file should be cleaned up
         assert not progress_file.exists()
-
-        # compute should only have been called once (for book2)
         assert mock_compute.call_count == 1
 
-    @patch("commands.compute_perplexities.load_perplexity_model")
-    @patch("commands.compute_perplexities.compute_perplexities_in_book")
+    @patch("commands.compute_bpb.load_bpb_model")
+    @patch("commands.compute_bpb.compute_bpb_in_book")
     def test_progress_file_cleaned_up_on_success(
         self, mock_compute, mock_load_model, tmp_path: Path
     ):
@@ -306,11 +293,11 @@ class TestComputePerplexitiesCLI:
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
         mock_load_model.return_value = (mock_model, mock_tokenizer)
-        mock_compute.return_value = {"book_id": "book1", "perplexities": [10.0]}
+        mock_compute.return_value = {"book_id": "book1", "bpb_values": [0.8]}
 
         input_file = tmp_path / "input.jsonl"
-        output_file = tmp_path / "output.perplexity.jsonl"
-        progress_file = tmp_path / "output.perplexity.progress.jsonl"
+        output_file = tmp_path / "output.bpb.jsonl"
+        progress_file = tmp_path / "output.bpb.progress.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -321,11 +308,10 @@ class TestComputePerplexitiesCLI:
 
         runner = CliRunner()
         result = runner.invoke(
-            compute_perplexities_main,
+            compute_bpb_main,
             ["--input-file", str(input_file), "--output-file", str(output_file)],
         )
 
         assert result.exit_code == 0
         assert output_file.exists()
-        # Progress file should not exist after successful completion
         assert not progress_file.exists()

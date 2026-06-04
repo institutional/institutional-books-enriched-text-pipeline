@@ -63,9 +63,9 @@ class BookSimhashes(TypedDict):
     simhashes: list[SimhashHash]
 
 
-class BookPerplexities(TypedDict):
+class BookBPB(TypedDict):
     book_id: str
-    perplexities: list[float]
+    bpb_values: list[float]
 
 
 class TextStats(TypedDict):
@@ -84,14 +84,14 @@ class TextStats(TypedDict):
     tokenizability_o200k_base_ratio: float
 
 
-class PerplexityStats(TypedDict, total=False):
-    """Perplexity statistics for a book. All fields optional (empty if no valid perplexities)."""
+class BPBStats(TypedDict, total=False):
+    """Bits-per-byte statistics for a book. All fields optional (empty if no valid values)."""
 
-    perplexity_min: float
-    perplexity_max: float
-    perplexity_median: float
-    perplexity_avg: float
-    perplexity_p10: float
-    perplexity_p30: float
-    perplexity_p70: float
-    perplexity_p90: float
+    bpb_min: float
+    bpb_max: float
+    bpb_median: float
+    bpb_avg: float
+    bpb_p10: float
+    bpb_p30: float
+    bpb_p70: float
+    bpb_p90: float

@@ -97,28 +97,28 @@ def strip_gz_suffix(path: Path | str) -> Path:
     return path
 
 
-def load_perplexity_map(perplexity_file: Path | str | None) -> dict[str, list[float]]:
+def load_bpb_map(bpb_file: Path | str | None) -> dict[str, list[float]]:
     """
-    Load perplexity values from a .perplexity.jsonl file.
+    Load BPB values from a .bpb.jsonl file.
 
     Handles gzip compression automatically. Skips malformed JSON lines with a warning.
 
     Args:
-        perplexity_file: Path to the perplexity file, or None
+        bpb_file: Path to the BPB file, or None
 
     Returns:
-        Dict mapping book_id to list of perplexity values
+        Dict mapping book_id to list of BPB values
     """
     from loguru import logger
 
-    if perplexity_file is None:
+    if bpb_file is None:
         return {}
 
-    path = Path(perplexity_file)
+    path = Path(bpb_file)
     if not path.exists():
         return {}
 
-    perp_map: dict[str, list[float]] = {}
+    bpb_map: dict[str, list[float]] = {}
     with open_jsonl(path, "r") as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
@@ -126,8 +126,8 @@ def load_perplexity_map(perplexity_file: Path | str | None) -> dict[str, list[fl
                 continue
             try:
                 record = json.loads(line)
-                perp_map[record["book_id"]] = record["perplexities"]
+                bpb_map[record["book_id"]] = record["bpb_values"]
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Skipping malformed line {line_num} in {path}: {e}")
 
-    return perp_map
+    return bpb_map

@@ -74,15 +74,15 @@ class TestPostprocessShardCLI:
         assert "frontmatter" not in book
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
-    def test_uses_perplexity_file(self, mock_load_classifier, tmp_path: Path):
-        """Test that perplexity values are included in annotations when file is provided."""
+    def test_uses_bpb_file(self, mock_load_classifier, tmp_path: Path):
+        """Test that BPB values are included in annotations when file is provided."""
         mock_classifier = MagicMock()
         mock_classifier.predict.return_value = []
         mock_load_classifier.return_value = mock_classifier
 
         input_file = tmp_path / "input.jsonl"
         output_file = tmp_path / "output.jsonl"
-        perp_file = tmp_path / "perplexity.jsonl"
+        bpb_file = tmp_path / "bpb.jsonl"
 
         book = {
             "barcode_src": "book1",
@@ -95,8 +95,8 @@ class TestPostprocessShardCLI:
         }
         input_file.write_text(json.dumps(book))
 
-        perp_record = {"book_id": "book1", "perplexities": [12.5]}
-        perp_file.write_text(json.dumps(perp_record))
+        bpb_record = {"book_id": "book1", "bpb_values": [0.85]}
+        bpb_file.write_text(json.dumps(bpb_record))
 
         runner = CliRunner()
         result = runner.invoke(
@@ -104,15 +104,14 @@ class TestPostprocessShardCLI:
             [
                 "--input-file", str(input_file),
                 "--output-file", str(output_file),
-                "--perplexity-file", str(perp_file),
+                "--bpb-file", str(bpb_file),
             ],
         )
 
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        # Perplexity should be in the annotated middlematter (step13)
-        assert 'perplexity="12.5"' in output_book["annotated_middlematter"]
+        assert 'data-bpb="0.8"' in output_book["annotated_middlematter"]
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     def test_step_range(self, mock_load_classifier, tmp_path: Path):

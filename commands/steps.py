@@ -19,8 +19,8 @@ MAIN_STEPS = [
     "step10_chunk",
 ]
 
-# Perplexity computation is handled by a separate CLI (GPU-intensive):
-#   compute_perplexities.py - compute per-paragraph perplexity → *.perplexity.jsonl
+# BPB computation is handled by a separate CLI (GPU-intensive):
+#   compute_bpb.py - compute per-paragraph bits-per-byte → *.bpb.jsonl
 
 # Deduplication is handled by separate CLIs:
 #   dedup_compute_simhashes.py - compute simhashes per shard (parallel)

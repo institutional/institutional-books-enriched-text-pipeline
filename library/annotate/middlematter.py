@@ -4,7 +4,7 @@ library/annotate/middlematter.py - middlematter annotation for main content
 Handles annotation of
 
 - Sections (groups of paragraphs)
-- Paragraphs (with perplexity scores)
+- Paragraphs (with BPB scores)
 - Duplicate/representative markers (with cluster references)
 """
 
@@ -65,14 +65,14 @@ def get_section_para_range(
 
 def annotate_middlematter(
     book: BookJSON,
-    perplexities: list[float] | None = None,
+    bpb_values: list[float] | None = None,
 ) -> tuple[str, dict[str, list[str] | list[float]]]:
     """
     Annotate middlematter content with semantic tags.
 
     Args:
         book: Book dictionary with middlematter_sentences and indices.
-        perplexities: Optional list of perplexity values per paragraph.
+        bpb_values: Optional list of bits-per-byte values per paragraph.
 
     Returns:
         Tuple of (annotated string, language distribution dict).
@@ -114,32 +114,29 @@ def annotate_middlematter(
         start_para, end_para = get_section_para_range(section_idx, section_starts, para_starts)
 
         section_content = []
-        section_perplexities = []
+        section_bpbs: list[float] = []
         para_idx = start_para
 
         while para_idx < end_para:
             para_text = get_paragraph_text(sentences, para_starts, para_idx)
-            para_perp = (
-                perplexities[para_idx] if perplexities and para_idx < len(perplexities) else None
+            para_bpb = (
+                bpb_values[para_idx] if bpb_values and para_idx < len(bpb_values) else None
             )
 
-            # Skip invalid perplexities (-1 means too short)
-            if para_perp is not None and para_perp > 0:
-                section_perplexities.append(para_perp)
+            if para_bpb is not None and para_bpb > 0:
+                section_bpbs.append(para_bpb)
 
             str_idx = str(para_idx)
 
             if str_idx in removed_paras:
-                # Paragraph marked for removal — skip entirely
                 para_idx += 1
 
             elif str_idx in representative_paras:
-                # Representative paragraph — cluster info goes on the <p> tag
                 para_lang = languages[para_idx] if para_idx < len(languages) else None
                 cluster = f"{book_id}:{para_idx}"
                 para_tag = build_paragraph_tag(
                     para_text,
-                    para_perp if para_perp and para_perp > 0 else None,
+                    para_bpb if para_bpb and para_bpb > 0 else None,
                     para_lang,
                     representative_cluster=cluster,
                 )
@@ -147,8 +144,6 @@ def annotate_middlematter(
                 para_idx += 1
 
             elif str_idx in duplicate_paras:
-                # Collect consecutive duplicates that reference consecutive
-                # paragraphs in the same representative book
                 dup_paras_tags = []
                 start_dup = para_idx
                 first_ref = duplicate_paras[str_idx]
@@ -164,21 +159,20 @@ def annotate_middlematter(
                         break
 
                     d_text = get_paragraph_text(sentences, para_starts, para_idx)
-                    d_perp = (
-                        perplexities[para_idx]
-                        if perplexities and para_idx < len(perplexities)
+                    d_bpb = (
+                        bpb_values[para_idx]
+                        if bpb_values and para_idx < len(bpb_values)
                         else None
                     )
-                    d_perp_valid = d_perp if d_perp and d_perp > 0 else None
-                    if d_perp is not None and d_perp > 0:
-                        section_perplexities.append(d_perp)
+                    d_bpb_valid = d_bpb if d_bpb and d_bpb > 0 else None
+                    if d_bpb is not None and d_bpb > 0:
+                        section_bpbs.append(d_bpb)
                     d_lang = languages[para_idx] if para_idx < len(languages) else None
                     dup_paras_tags.append(
-                        build_paragraph_tag(d_text, d_perp_valid, d_lang)
+                        build_paragraph_tag(d_text, d_bpb_valid, d_lang)
                     )
                     para_idx += 1
 
-                # Build cluster reference to the representative's paragraph range
                 last_ref_para = ref_para + len(dup_paras_tags) - 1
                 if ref_para == last_ref_para:
                     cluster = f"{first_ref_book}:{ref_para}"
@@ -189,20 +183,17 @@ def annotate_middlematter(
                 section_content.append(build_duplicate_tag(dup_content, cluster))
 
             else:
-                # Regular paragraph
-                para_perp_valid = para_perp if para_perp and para_perp > 0 else None
+                para_bpb_valid = para_bpb if para_bpb and para_bpb > 0 else None
                 para_lang = languages[para_idx] if para_idx < len(languages) else None
-                section_content.append(build_paragraph_tag(para_text, para_perp_valid, para_lang))
+                section_content.append(build_paragraph_tag(para_text, para_bpb_valid, para_lang))
                 para_idx += 1
 
-        # Compute section mean perplexity
-        section_perp = None
-        if section_perplexities:
-            section_perp = sum(section_perplexities) / len(section_perplexities)
+        section_bpb = None
+        if section_bpbs:
+            section_bpb = sum(section_bpbs) / len(section_bpbs)
 
-        # Build section tag
         section_inner = "\n".join(section_content)
-        annotated_sections.append(build_section_tag(section_inner, section_perp))
+        annotated_sections.append(build_section_tag(section_inner, section_bpb))
 
     included_languages = [
         languages[i] for i in range(len(languages)) if str(i) not in removed_paras

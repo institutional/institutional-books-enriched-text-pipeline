@@ -1,8 +1,8 @@
 """
-compute_perplexities.py - Compute per-paragraph perplexity scores.
+compute_bpb.py - Compute per-paragraph bits-per-byte scores.
 
-Computes perplexity for each paragraph using a causal language model.
-Outputs to .perplexity.jsonl files for use by postprocess_shard.py.
+Computes BPB for each paragraph using a causal language model.
+Outputs to .bpb.jsonl files for use by postprocess_shard.py.
 
 This is designed to run on GPU nodes separately from the main pipeline.
 """
@@ -15,9 +15,9 @@ import torch
 from loguru import logger
 
 from const.config import PipelineConfig, load_config
-from library.perplexity.compute_perplexity import (
-    compute_perplexities_in_book,
-    load_perplexity_model,
+from library.bpb.compute_bpb import (
+    compute_bpb_in_book,
+    load_bpb_model,
 )
 from utils.jsonl_io import open_jsonl
 
@@ -77,7 +77,7 @@ def finalize_output(progress_path: Path, final_path: Path) -> int:
     "--output-file",
     type=click.Path(path_type=Path),
     required=True,
-    help="Output .perplexity.jsonl file",
+    help="Output .bpb.jsonl file",
 )
 @click.option(
     "--config-file",
@@ -106,32 +106,30 @@ def main(
     batch_size: int,
 ):
     """
-    Compute perplexity for all paragraphs in a shard.
+    Compute bits-per-byte for all paragraphs in a shard.
 
-    Reads books with chunked paragraphs and outputs perplexity records:
-        {"book_id": "barcode123", "perplexities": [12.5, 45.2, 8.7, ...]}
+    Reads books with chunked paragraphs and outputs BPB records:
+        {"book_id": "barcode123", "bpb_values": [0.82, 1.45, 0.67, ...]}
 
-    The nth perplexity corresponds to the nth paragraph
+    The nth value corresponds to the nth paragraph
     (from subtopic_paragraph_start_indices).
 
     Use --resume to continue from a previous interrupted run.
 
     Example:
-        python -m commands.compute_perplexities \\
+        python -m commands.compute_bpb \\
             --input-file DATA/shards/processed/shard0001.complete.jsonl \\
-            --output-file DATA/perplexity/shard0001.perplexity.jsonl
+            --output-file DATA/bpb/shard0001.bpb.jsonl
     """
     config = load_config(config_file) if config_file else PipelineConfig()
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Progress file path
     progress_path = output_file.with_suffix(".progress.jsonl")
     incomplete_path = output_file.with_name(
         output_file.stem + ".incomplete.jsonl"
     )
 
-    # Load previously processed book IDs if resuming
     processed_book_ids: set[str] = set()
     if resume:
         processed_book_ids = load_processed_book_ids(progress_path)
@@ -142,20 +140,18 @@ def main(
         else:
             logger.info("Resuming: no previous progress found, starting fresh")
     else:
-        # Fresh start - remove any existing progress file
         if progress_path.exists():
             progress_path.unlink()
 
     device = get_device()
-    logger.info(f"Loading perplexity model on {device}...")
-    model, tokenizer = load_perplexity_model(config.perplexity.model_name, device)
+    logger.info(f"Loading BPB model on {device}...")
+    model, tokenizer = load_bpb_model(config.bpb.model_name, device)
 
     books_processed = 0
     books_skipped = 0
     books_failed = 0
     total_paragraphs = 0
 
-    # Open progress and incomplete files for appending
     progress_file = open(progress_path, "a", encoding="utf-8")
     incomplete_file = open(incomplete_path, "a", encoding="utf-8")
 
@@ -165,23 +161,22 @@ def main(
                 book = json.loads(line)
                 book_id = book.get("barcode_src", "")
 
-                # Skip if already processed
                 if book_id in processed_book_ids:
                     books_skipped += 1
                     continue
 
                 try:
-                    result = compute_perplexities_in_book(
+                    result = compute_bpb_in_book(
                         book, model, tokenizer, device, batch_size=batch_size
                     )
                     record = {
                         "book_id": result["book_id"],
-                        "perplexities": result["perplexities"],
+                        "bpb_values": result["bpb_values"],
                     }
                     progress_file.write(json.dumps(record) + "\n")
                     progress_file.flush()
                     books_processed += 1
-                    total_paragraphs += len(result["perplexities"])
+                    total_paragraphs += len(result["bpb_values"])
                 except ValueError as e:
                     logger.warning(f"Skipping {book_id}: {e}")
                     books_skipped += 1
@@ -212,13 +207,12 @@ def main(
             f"{books_failed} books failed (OOM/runtime error), logged to {incomplete_path}"
         )
 
-    # Finalize output: move progress file to final destination
     total_books = finalize_output(progress_path, output_file)
 
     logger.info(
         f"Processed {books_processed} books this run, "
         f"{total_books} total books, "
-        f"computed {total_paragraphs} perplexities to {output_file}"
+        f"computed BPB for {total_paragraphs} paragraphs to {output_file}"
     )
 
 

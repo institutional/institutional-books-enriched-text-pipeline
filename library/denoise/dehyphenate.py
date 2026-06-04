@@ -8,7 +8,7 @@ hyphenatation to split long words and make efficient use of line widths.
 This module tries to detect and remove extra hyphens at ends of lines.
 
 The approach is ngram-based. We combine a general language ngram model with
-ngrams from the book in question, and compare 5-gram perplexity with end-of-line
+ngrams from the book in question, and compare 5-gram scores with end-of-line
 hyphens removed vs kept-with-a-space vs kept-wthout-a-space.
 
 NOTE: earlier versions of this module used the KenLM ngram language model.

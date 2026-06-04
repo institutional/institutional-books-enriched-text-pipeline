@@ -42,8 +42,8 @@ class SegmentConfig:
 
 
 @dataclass
-class PerplexityConfig:
-    """Perplexity computation configuration."""
+class BPBConfig:
+    """Bits-per-byte computation configuration."""
 
     enabled: bool = False
     model_name: str = "Qwen/Qwen3-0.6B-Base"
@@ -54,7 +54,7 @@ class PipelineConfig:
     model_paths: ModelPaths = field(default_factory=ModelPaths)
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
     segment: SegmentConfig = field(default_factory=SegmentConfig)
-    perplexity: PerplexityConfig = field(default_factory=PerplexityConfig)
+    bpb: BPBConfig = field(default_factory=BPBConfig)
     use_gzip: bool = False  # Compress shard files with gzip
 
     @classmethod
@@ -90,15 +90,15 @@ class PipelineConfig:
         segment = SegmentConfig(
             sat_model_name=data.get("segment", {}).get("sat_model_name", "sat-3l-sm"),
         )
-        perplexity = PerplexityConfig(
-            enabled=data.get("perplexity", {}).get("enabled", False),
-            model_name=data.get("perplexity", {}).get("model_name", "Qwen/Qwen3-0.6B-Base"),
+        bpb = BPBConfig(
+            enabled=data.get("bpb", {}).get("enabled", False),
+            model_name=data.get("bpb", {}).get("model_name", "Qwen/Qwen3-0.6B-Base"),
         )
         return cls(
             model_paths=model_paths,
             chunking=chunking,
             segment=segment,
-            perplexity=perplexity,
+            bpb=bpb,
             use_gzip=data.get("use_gzip", False),
         )
 

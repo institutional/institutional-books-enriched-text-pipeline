@@ -2,62 +2,59 @@
 
 import pytest
 
-from library.metadata.perplexity_stats import compute_perplexity_stats
+from library.metadata.bpb_stats import compute_bpb_stats
 
 
-class TestComputePerplexityStats:
+class TestComputeBPBStats:
     def test_empty_list(self):
-        result = compute_perplexity_stats([])
+        result = compute_bpb_stats([])
         assert result == {}
 
     def test_all_invalid_values(self):
-        result = compute_perplexity_stats([-1, -1, -1])
+        result = compute_bpb_stats([-1, -1, -1])
         assert result == {}
 
     def test_single_value(self):
-        result = compute_perplexity_stats([10.0])
-        assert result["perplexity_min"] == 10.0
-        assert result["perplexity_max"] == 10.0
-        assert result["perplexity_median"] == 10.0
-        assert result["perplexity_avg"] == 10.0
+        result = compute_bpb_stats([0.85])
+        assert result["bpb_min"] == 0.85
+        assert result["bpb_max"] == 0.85
+        assert result["bpb_median"] == 0.85
+        assert result["bpb_avg"] == 0.85
 
     def test_multiple_values(self):
-        values = [5.0, 10.0, 15.0, 20.0, 25.0]
-        result = compute_perplexity_stats(values)
-        assert result["perplexity_min"] == 5.0
-        assert result["perplexity_max"] == 25.0
-        assert result["perplexity_median"] == 15.0
-        assert result["perplexity_avg"] == 15.0
+        values = [0.5, 1.0, 1.5, 2.0, 2.5]
+        result = compute_bpb_stats(values)
+        assert result["bpb_min"] == 0.5
+        assert result["bpb_max"] == 2.5
+        assert result["bpb_median"] == 1.5
+        assert result["bpb_avg"] == 1.5
 
     def test_filters_invalid_values(self):
-        values = [10.0, -1.0, 20.0, -1.0, 30.0]
-        result = compute_perplexity_stats(values)
-        # Should only consider 10, 20, 30
-        assert result["perplexity_min"] == 10.0
-        assert result["perplexity_max"] == 30.0
-        assert result["perplexity_avg"] == 20.0
+        values = [0.8, -1.0, 1.2, -1.0, 1.6]
+        result = compute_bpb_stats(values)
+        assert result["bpb_min"] == 0.8
+        assert result["bpb_max"] == 1.6
+        assert abs(result["bpb_avg"] - 1.2) < 0.001
 
     def test_percentiles(self):
-        # Use values that make percentiles easy to verify
-        values = list(range(1, 101))  # 1 to 100
-        result = compute_perplexity_stats(values)
-        # Percentiles should be approximately at those positions
-        assert 9 <= result["perplexity_p10"] <= 11
-        assert 29 <= result["perplexity_p30"] <= 31
-        assert 69 <= result["perplexity_p70"] <= 71
-        assert 89 <= result["perplexity_p90"] <= 91
+        values = [i / 100 for i in range(1, 101)]  # 0.01 to 1.0
+        result = compute_bpb_stats(values)
+        assert 0.09 <= result["bpb_p10"] <= 0.11
+        assert 0.29 <= result["bpb_p30"] <= 0.31
+        assert 0.69 <= result["bpb_p70"] <= 0.71
+        assert 0.89 <= result["bpb_p90"] <= 0.91
 
     def test_contains_expected_keys(self):
-        result = compute_perplexity_stats([10.0, 20.0])
+        result = compute_bpb_stats([0.8, 1.2])
         expected_keys = {
-            "perplexity_min",
-            "perplexity_max",
-            "perplexity_median",
-            "perplexity_avg",
-            "perplexity_p10",
-            "perplexity_p30",
-            "perplexity_p70",
-            "perplexity_p90",
+            "bpb_min",
+            "bpb_max",
+            "bpb_median",
+            "bpb_avg",
+            "bpb_p10",
+            "bpb_p30",
+            "bpb_p70",
+            "bpb_p90",
         }
         assert set(result.keys()) == expected_keys
 

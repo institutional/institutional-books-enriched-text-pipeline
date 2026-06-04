@@ -1,5 +1,5 @@
 """
-compute_perplexity.py - core perplexity computation logic.
+compute_bpb.py - core bits-per-byte computation logic.
 """
 
 import math
@@ -9,14 +9,16 @@ import torch.nn.functional as F
 from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from const.types import BookJSON, BookPerplexities
+from const.types import BookBPB, BookJSON
 from library.chunk.utils import segments_from_starts
 
+LOG2 = math.log(2)
 
-def load_perplexity_model(
+
+def load_bpb_model(
     model_name: str, device: str
 ) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-    """Load a causal LM model and tokenizer for perplexity computation."""
+    """Load a causal LM model and tokenizer for BPB computation."""
     logger.info(f"Loading model {model_name} and tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.bfloat16)
@@ -26,7 +28,7 @@ def load_perplexity_model(
     return model, tokenizer
 
 
-def compute_perplexity(
+def compute_bpb(
     text: str,
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
@@ -34,14 +36,15 @@ def compute_perplexity(
     max_length: int = 30000,
 ) -> float:
     """
-    Compute perplexity for a single text.
+    Compute bits-per-byte for a single text.
 
-    Returns -1 for text shorter than 5 characters (too short for meaningful perplexity).
+    Returns -1 for text shorter than 5 characters.
     """
     if len(text) < 5:
         return -1.0
 
-    # Check if truncation will occur
+    n_bytes = len(text.encode("utf-8"))
+
     token_count = len(tokenizer.encode(text, add_special_tokens=True))
     if token_count > max_length:
         logger.warning(f"Truncation occurred: {token_count} tokens exceeds max_length {max_length}")
@@ -57,12 +60,14 @@ def compute_perplexity(
 
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
-        loss = outputs.loss.item()
+        mean_loss = outputs.loss.item()
 
-    return math.exp(loss)
+    n_predicted = inputs["input_ids"].shape[1] - 1
+    total_loss = mean_loss * n_predicted
+    return total_loss / (n_bytes * LOG2)
 
 
-def compute_perplexities_batched(
+def compute_bpb_batched(
     texts: list[str],
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
@@ -71,32 +76,30 @@ def compute_perplexities_batched(
     max_length: int = 30000,
 ) -> list[float]:
     """
-    Compute perplexity for a list of texts using length-bucketed batched inference.
+    Compute bits-per-byte for a list of texts using length-bucketed batched inference.
 
     Groups texts by token length into buckets so that padding within each batch
-    is minimal (at most ~25% overhead). Uses right-padding with attention mask.
+    is minimal. Uses right-padding with attention mask.
 
-    Returns a list of perplexities (one per input text), with -1.0 for texts
+    Returns a list of BPB values (one per input text), with -1.0 for texts
     shorter than 5 characters.
     """
     results: list[float] = [0.0] * len(texts)
 
-    # Handle short texts immediately; pre-tokenize the rest to get lengths
-    batch_entries: list[tuple[int, str, int]] = []  # (original_idx, text, token_count)
+    batch_entries: list[tuple[int, str, int, int]] = []  # (idx, text, token_count, n_bytes)
     for i, text in enumerate(texts):
         if len(text) < 5:
             results[i] = -1.0
         else:
             token_count = len(tokenizer.encode(text, add_special_tokens=True))
-            batch_entries.append((i, text, token_count))
+            n_bytes = len(text.encode("utf-8"))
+            batch_entries.append((i, text, token_count, n_bytes))
 
     if not batch_entries:
         return results
 
-    # Sort by token count for length-bucketed batching
     batch_entries.sort(key=lambda x: x[2])
 
-    # Set up right-padding
     original_padding_side = tokenizer.padding_side
     original_pad_token = tokenizer.pad_token_id
     tokenizer.padding_side = "right"
@@ -108,6 +111,7 @@ def compute_perplexities_batched(
             batch_slice = batch_entries[batch_start : batch_start + batch_size]
             idx_slice = [entry[0] for entry in batch_slice]
             text_slice = [entry[1] for entry in batch_slice]
+            bytes_slice = [entry[3] for entry in batch_slice]
 
             try:
                 inputs = tokenizer(
@@ -124,7 +128,6 @@ def compute_perplexities_batched(
                     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
                     logits = outputs.logits
 
-                # Compute per-sequence loss in float32
                 logits_f32 = logits.float()
 
                 for j in range(len(text_slice)):
@@ -134,11 +137,12 @@ def compute_perplexities_batched(
                         continue
                     shift_logits_j = logits_f32[j, : n_tokens - 1, :]
                     shift_labels_j = input_ids[j, 1:n_tokens]
-                    loss_j = F.cross_entropy(shift_logits_j, shift_labels_j).item()
-                    results[idx_slice[j]] = math.exp(loss_j)
+                    loss_sum = F.cross_entropy(
+                        shift_logits_j, shift_labels_j, reduction="sum"
+                    ).item()
+                    results[idx_slice[j]] = loss_sum / (bytes_slice[j] * LOG2)
 
             except (torch.OutOfMemoryError, RuntimeError) as e:
-                # OOM or tensor size limit — fall back to sequential for this batch
                 if "out of memory" in str(e).lower() or "INT_MAX" in str(e):
                     logger.warning(
                         f"Batch of {len(text_slice)} failed ({e}), falling back to sequential"
@@ -146,7 +150,7 @@ def compute_perplexities_batched(
                     if device == "cuda":
                         torch.cuda.empty_cache()
                     for j, text in enumerate(text_slice):
-                        results[idx_slice[j]] = compute_perplexity(
+                        results[idx_slice[j]] = compute_bpb(
                             text, model, tokenizer, device, max_length
                         )
                 else:
@@ -158,15 +162,15 @@ def compute_perplexities_batched(
     return results
 
 
-def compute_perplexities_in_book(
+def compute_bpb_in_book(
     book: BookJSON,
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
     device: str,
     batch_size: int = 16,
-) -> BookPerplexities:
+) -> BookBPB:
     """
-    Compute perplexities for all subtopic paragraph chunks in a book.
+    Compute bits-per-byte for all subtopic paragraph chunks in a book.
 
     Uses batched inference for throughput. Falls back to sequential on OOM.
     """
@@ -186,8 +190,8 @@ def compute_perplexities_in_book(
         " ".join(segments) for segments in segments_from_starts(sentences, para_starts)
     ]
 
-    perplexities = compute_perplexities_batched(
+    bpb_values = compute_bpb_batched(
         paragraphs, model, tokenizer, device, batch_size=batch_size
     )
 
-    return BookPerplexities(book_id=book_id, perplexities=perplexities)
+    return BookBPB(book_id=book_id, bpb_values=bpb_values)

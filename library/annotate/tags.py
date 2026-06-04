@@ -56,7 +56,7 @@ def build_backmatter_tag(content: str) -> str:
 
 def build_paragraph_tag(
     text: str,
-    perplexity: float | None = None,
+    bpb: float | None = None,
     language: str | None = None,
     representative_cluster: str | None = None,
 ) -> str:
@@ -65,18 +65,18 @@ def build_paragraph_tag(
 
     Args:
         text: The paragraph text content.
-        perplexity: Optional perplexity score for the paragraph.
+        bpb: Optional bpb score for the paragraph.
         language: Optional language code for the paragraph.
         representative_cluster: Optional cluster ID if this is a representative
             paragraph (e.g., "BARCODE:10"). Adds data-representative and
             data-clusterid attributes.
 
     Returns:
-        Tagged string like: <p data-perplexity="8.7" data-language="en">text</p>
+        Tagged string like: <p data-bpb="8.7" data-language="en">text</p>
     """
     attrs = []
-    if perplexity is not None:
-        attrs.append(f'data-perplexity="{perplexity:.1f}"')
+    if bpb is not None:
+        attrs.append(f'data-bpb="{bpb:.1f}"')
     if language is not None:
         attrs.append(f'data-language="{language}"')
     if representative_cluster is not None:
@@ -89,19 +89,19 @@ def build_paragraph_tag(
     return f"<p>{escape_html(text)}</p>"
 
 
-def build_section_tag(content: str, perplexity: float | None = None) -> str:
+def build_section_tag(content: str, bpb: float | None = None) -> str:
     """
     Build a section tag wrapping paragraph content.
 
     Args:
         content: Already-tagged paragraph content (not escaped again).
-        perplexity: Optional mean perplexity of enclosed paragraphs.
+        bpb: Optional mean bpb of enclosed paragraphs.
 
     Returns:
-        Tagged string like: <section data-perplexity="10.5">...</section>
+        Tagged string like: <section data-bpb="10.5">...</section>
     """
-    if perplexity is not None:
-        return f'<section data-perplexity="{perplexity:.1f}">\n{content}\n</section>'
+    if bpb is not None:
+        return f'<section data-bpb="{bpb:.1f}">\n{content}\n</section>'
     return f"<section>\n{content}\n</section>"
 
 

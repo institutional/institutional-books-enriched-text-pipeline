@@ -17,9 +17,9 @@ from const.config import PipelineConfig, load_config
 from const.types import BookJSON, ProcessStats
 from library.annotate.endmatter import load_em_subclassifier
 from library.annotate.middlematter import annotate_middlematter
-from library.metadata.perplexity_stats import compute_perplexity_stats
+from library.metadata.bpb_stats import compute_bpb_stats
 from library.metadata.text_stats import compute_text_stats
-from utils.jsonl_io import load_perplexity_map, open_jsonl
+from utils.jsonl_io import load_bpb_map, open_jsonl
 
 # Fields to keep in final output (step15)
 KEEP_FIELDS = {
@@ -38,24 +38,21 @@ KEEP_FIELDS = {
 def step13_annotate_book(
     book: BookJSON,
     em_classifier,
-    perp_map: dict[str, list[float]],
+    bpb_map: dict[str, list[float]],
 ) -> BookJSON:
     """Step 13: Annotate book with semantic tags."""
     from library.annotate.endmatter import annotate_backmatter, annotate_frontmatter
 
     book_id = book.get("barcode_src", "UNKNOWN")
-    perplexities = perp_map.get(book_id)
+    bpb_values = bpb_map.get(book_id)
 
-    # Annotate frontmatter
     frontmatter = book.get("frontmatter", [])
     book["annotated_frontmatter"] = annotate_frontmatter(frontmatter, em_classifier)
 
-    # Annotate middlematter
-    annotated_mm, lang_dist = annotate_middlematter(book, perplexities)
+    annotated_mm, lang_dist = annotate_middlematter(book, bpb_values)
     book["annotated_middlematter"] = annotated_mm
     book["language_distribution_gen"] = lang_dist
 
-    # Annotate backmatter
     backmatter = book.get("backmatter", [])
     book["annotated_backmatter"] = annotate_backmatter(backmatter, em_classifier)
 
@@ -64,20 +61,17 @@ def step13_annotate_book(
 
 def step14_add_metadata_book(
     book: BookJSON,
-    perp_map: dict[str, list[float]],
+    bpb_map: dict[str, list[float]],
 ) -> BookJSON:
     """Step 14: Compute and add metadata statistics."""
     book_id = book.get("barcode_src", "UNKNOWN")
 
-    # Compute text statistics
     text_stats = compute_text_stats(book)
 
-    # Get perplexity statistics if available
-    perplexities = perp_map.get(book_id, [])
-    perp_stats = compute_perplexity_stats(perplexities) if perplexities else {}
+    bpb_values = bpb_map.get(book_id, [])
+    bpb_stats = compute_bpb_stats(bpb_values) if bpb_values else {}
 
-    # Combine all metadata
-    book["metadata"] = {**text_stats, **perp_stats}
+    book["metadata"] = {**text_stats, **bpb_stats}
     return book
 
 
@@ -101,7 +95,7 @@ def postprocess_book(
     book: BookJSON,
     steps: list[str],
     em_classifier,
-    perp_map: dict[str, list[float]],
+    bpb_map: dict[str, list[float]],
     keep_sentences: bool = True,
     keep_indices: bool = True,
 ) -> tuple[BookJSON, str | None]:
@@ -117,9 +111,9 @@ def postprocess_book(
     try:
         for step_name in steps:
             if step_name == "step13_annotate":
-                current_book = step13_annotate_book(current_book, em_classifier, perp_map)
+                current_book = step13_annotate_book(current_book, em_classifier, bpb_map)
             elif step_name == "step14_add_metadata":
-                current_book = step14_add_metadata_book(current_book, perp_map)
+                current_book = step14_add_metadata_book(current_book, bpb_map)
             elif step_name == "step15_clean":
                 current_book = step15_clean_book(current_book, keep_sentences, keep_indices)
             else:
@@ -190,7 +184,7 @@ def postprocess_shard(
     input_file: Path,
     output_file: Path,
     config: PipelineConfig,
-    perplexity_file: Path | None = None,
+    bpb_file: Path | None = None,
     start_step: str | None = None,
     end_step: str | None = None,
     keep_sentences: bool = True,
@@ -206,7 +200,7 @@ def postprocess_shard(
         input_file: Input JSONL file (after deduplication)
         output_file: Output JSONL file
         config: Pipeline configuration
-        perplexity_file: Optional perplexity file
+        bpb_file: Optional BPB file
         start_step: First step to run (default: step13_annotate)
         end_step: Last step to run (default: step15_clean)
         keep_sentences: Keep middlematter_sentences in final output
@@ -226,10 +220,9 @@ def postprocess_shard(
         em_classifier = load_em_subclassifier(config.model_paths.em_subclassifier)
         logger.info(f"Loaded em_subclassifier from {config.model_paths.em_subclassifier}")
 
-    # Load perplexity map
-    perp_map = load_perplexity_map(perplexity_file)
-    if perp_map:
-        logger.info(f"Loaded perplexities for {len(perp_map)} books")
+    bpb_map = load_bpb_map(bpb_file)
+    if bpb_map:
+        logger.info(f"Loaded BPB values for {len(bpb_map)} books")
 
     # Determine if output should be compressed
     use_gzip = output_file.suffix == ".gz" or output_file.name.endswith(".jsonl.gz")
@@ -288,7 +281,7 @@ def postprocess_shard(
                 logger.debug(f"Post-processing book {book_id}")
 
                 result_book, error_msg = postprocess_book(
-                    book, steps, em_classifier, perp_map, keep_sentences, keep_indices
+                    book, steps, em_classifier, bpb_map, keep_sentences, keep_indices
                 )
 
                 if error_msg is None:
@@ -346,10 +339,10 @@ def postprocess_shard(
     help="Output JSONL file for final books",
 )
 @click.option(
-    "--perplexity-file",
+    "--bpb-file",
     type=click.Path(exists=True, path_type=Path),
     default=None,
-    help="Optional .perplexity.jsonl file with perplexity values",
+    help="Optional .bpb.jsonl file with bits-per-byte values",
 )
 @click.option(
     "--config-file",
@@ -388,7 +381,7 @@ def postprocess_shard(
 def main(
     input_file: Path,
     output_file: Path,
-    perplexity_file: Path | None,
+    bpb_file: Path | None,
     config_file: Path | None,
     start_step: str | None,
     end_step: str | None,
@@ -408,7 +401,7 @@ def main(
         python -m commands.postprocess_shard \\
             --input-file DATA/shards/processed/shard0001.complete.jsonl \\
             --output-file DATA/shards/final/shard0001.final.jsonl \\
-            --perplexity-file DATA/perplexity/shard0001.perplexity.jsonl \\
+            --bpb-file DATA/bpb/shard0001.bpb.jsonl \\
             --config-file config.yaml
     """
     config = load_config(config_file) if config_file else PipelineConfig()
@@ -422,7 +415,7 @@ def main(
         input_file=input_file,
         output_file=output_file,
         config=config,
-        perplexity_file=perplexity_file,
+        bpb_file=bpb_file,
         start_step=start_step,
         end_step=end_step,
         keep_sentences=keep_sentences,
