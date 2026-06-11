@@ -144,6 +144,10 @@ def compute_bpb_batched(
                     ).item()
                     results[idx_slice[j]] = loss_sum / (bytes_slice[j] * LOG2)
 
+                del input_ids, attention_mask, outputs, logits, logits_f32
+                if device == "cuda":
+                    torch.cuda.empty_cache()
+
             except (torch.OutOfMemoryError, RuntimeError) as e:
                 if "out of memory" in str(e).lower() or "INT_MAX" in str(e):
                     logger.warning(
@@ -152,9 +156,17 @@ def compute_bpb_batched(
                     if device == "cuda":
                         torch.cuda.empty_cache()
                     for j, text in enumerate(text_slice):
-                        results[idx_slice[j]] = compute_bpb(
-                            text, model, tokenizer, device, max_length
-                        )
+                        try:
+                            results[idx_slice[j]] = compute_bpb(
+                                text, model, tokenizer, device, max_length
+                            )
+                        except (torch.OutOfMemoryError, RuntimeError):
+                            logger.warning(
+                                f"Paragraph {idx_slice[j]} OOM in sequential fallback, returning -1"
+                            )
+                            results[idx_slice[j]] = -1.0
+                        if device == "cuda":
+                            torch.cuda.empty_cache()
                 else:
                     raise
     finally:

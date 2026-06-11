@@ -41,7 +41,7 @@ def import_step_function(step_name: str) -> StepFunction:
     """
     Dynamically import a step's process_book function.
     """
-    module_name = f"commands.{step_name}"
+    module_name = f"commands.steps.{step_name}"
     module = importlib.import_module(module_name)
     return module.process_book
 
