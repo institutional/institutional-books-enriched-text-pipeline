@@ -61,7 +61,7 @@ class TestBuildEndmatterPageTag:
 class TestBuildParagraphTag:
     def test_paragraph_with_bpb(self):
         result = build_paragraph_tag("Some text.", 12.5)
-        assert result == '<p data-bpb="12.5">Some text.</p>'
+        assert result == '<p data-bpb="12.5000">Some text.</p>'
 
     def test_paragraph_without_bpb(self):
         result = build_paragraph_tag("Some text.")
@@ -69,7 +69,7 @@ class TestBuildParagraphTag:
 
     def test_bpb_formatting(self):
         result = build_paragraph_tag("Text", 8.123456)
-        assert 'data-bpb="8.1"' in result
+        assert 'data-bpb="8.1235"' in result
 
     def test_escapes_content(self):
         result = build_paragraph_tag("A < B", 5.0)
@@ -79,7 +79,7 @@ class TestBuildParagraphTag:
         result = build_paragraph_tag("Rep text.", 9.2, "eng", representative_cluster="book1:10")
         assert "data-representative" in result
         assert 'data-clusterid="book1:10"' in result
-        assert 'data-bpb="9.2"' in result
+        assert 'data-bpb="9.2000"' in result
         assert 'data-language="eng"' in result
 
 
@@ -87,7 +87,7 @@ class TestBuildSectionTag:
     def test_section_with_bpb(self):
         content = "<p>P1</p>"
         result = build_section_tag(content, 10.5)
-        assert '<section data-bpb="10.5">' in result
+        assert '<section data-bpb="10.5000">' in result
         assert "</section>" in result
         assert content in result
 
@@ -183,7 +183,7 @@ class TestAnnotateMiddlematter:
             "subtopic_section_start_indices": [0],
         }
         result, _ = annotate_middlematter(book, bpb_values=[12.5])
-        assert 'data-bpb="12.5"' in result
+        assert 'data-bpb="12.5000"' in result
 
     def test_invalid_bpb_excluded(self):
         book = {
@@ -354,7 +354,7 @@ class TestBuildParagraphTagWithLanguage:
 
     def test_paragraph_with_bpb_and_language(self):
         result = build_paragraph_tag("Text", bpb=10.5, language="deu")
-        assert result == '<p data-bpb="10.5" data-language="deu">Text</p>'
+        assert result == '<p data-bpb="10.5000" data-language="deu">Text</p>'
 
 
 class TestAnnotateMiddlematterWithLanguage:

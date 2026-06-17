@@ -114,7 +114,7 @@ class TestPostprocessShardCLI:
         assert result.exit_code == 0
 
         output_book = json.loads(output_file.read_text().strip())
-        assert 'data-bpb="0.8"' in output_book["annotated_middlematter"]
+        assert 'data-bpb="0.8500"' in output_book["annotated_middlematter"]
 
     @patch("commands.postprocess_shard.load_em_subclassifier")
     def test_step_range(self, mock_load_classifier, tmp_path: Path):

@@ -74,11 +74,11 @@ def build_paragraph_tag(
             data-clusterid attributes.
 
     Returns:
-        Tagged string like: <p data-bpb="8.7" data-language="en">text</p>
+        Tagged string like: <p data-bpb="8.7000" data-language="en">text</p>
     """
     attrs = []
     if bpb is not None:
-        attrs.append(f'data-bpb="{bpb:.1f}"')
+        attrs.append(f'data-bpb="{bpb:.4f}"')
     if language is not None:
         attrs.append(f'data-language="{language}"')
     if representative_cluster is not None:
@@ -100,10 +100,10 @@ def build_section_tag(content: str, bpb: float | None = None) -> str:
         bpb: Optional mean bpb of enclosed paragraphs.
 
     Returns:
-        Tagged string like: <section data-bpb="10.5">...</section>
+        Tagged string like: <section data-bpb="10.5000">...</section>
     """
     if bpb is not None:
-        return f'<section data-bpb="{bpb:.1f}">\n{content}\n</section>'
+        return f'<section data-bpb="{bpb:.4f}">\n{content}\n</section>'
     return f"<section>\n{content}\n</section>"
 
 

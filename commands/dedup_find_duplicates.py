@@ -369,6 +369,7 @@ def find_duplicates(
                     time_process += time.perf_counter() - t_proc
 
             for band_idx in range(NUM_BANDS):
+                logger.info(f"  Band {band_idx}/{NUM_BANDS}: sorting and extracting buckets...")
                 t_band = time.perf_counter()
 
                 # Extract band values (vectorized)
@@ -381,13 +382,22 @@ def find_duplicates(
                 keys.sort()
                 t_sort_end = time.perf_counter()
                 time_sort += t_sort_end - t_band
+                logger.info(
+                    f"  Band {band_idx}/{NUM_BANDS}: sort complete "
+                    f"({t_sort_end - t_band:.1f}s), submitting buckets to workers..."
+                )
 
                 # Extract buckets from sorted keys
                 current_chunk: list[list[int]] = []
                 band_buckets = 0
                 band_skipped = 0
 
-                for doc_indices in _buckets_from_sorted_keys(keys, n_records):
+                pbar = tqdm(
+                    _buckets_from_sorted_keys(keys, n_records),
+                    desc=f"  Band {band_idx} buckets",
+                    unit=" buckets",
+                )
+                for doc_indices in pbar:
                     if len(doc_indices) > max_bucket_size:
                         band_skipped += 1
                         skipped_f.write(
@@ -415,6 +425,8 @@ def find_duplicates(
                         time_submit += time.perf_counter() - t_s
                         current_chunk = []
 
+                pbar.close()
+
                 # Submit remaining buckets for this band
                 if current_chunk:
                     if len(pending) >= max_pending:
@@ -430,12 +442,16 @@ def find_duplicates(
                 buckets_skipped += band_skipped
 
                 logger.info(
-                    f"  Band {band_idx}: {band_buckets:,} buckets, "
+                    f"  Band {band_idx}/{NUM_BANDS}: {band_buckets:,} buckets, "
                     f"{band_skipped:,} skipped, "
-                    f"sort {t_sort_end - t_band:.1f}s"
+                    f"sort {t_sort_end - t_band:.1f}s | "
+                    f"duplicates so far: {duplicates_found:,}"
                 )
 
             # Drain all remaining futures
+            logger.info(
+                f"  All bands processed. Draining {len(pending)} remaining worker chunks..."
+            )
             while pending:
                 t_w = time.perf_counter()
                 drain_completed(block=True)
