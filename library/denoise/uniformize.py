@@ -102,8 +102,6 @@ def normalize_spaces(text: str) -> str:
 # All will be completely removed
 ZERO_WIDTH = {
     "\u200b",  # ZERO WIDTH SPACE
-    "\u200c",  # ZERO WIDTH NON-JOINER
-    "\u200d",  # ZERO WIDTH JOINER
     "\ufeff",  # ZERO WIDTH NO-BREAK SPACE / BOM
 }
 

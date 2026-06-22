@@ -9,15 +9,21 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from commands.dedup_annotate import main as dedup_annotate_main
+from commands.dedup_build_lookup import main as dedup_build_lookup_main
 from commands.dedup_compute_simhashes import main as dedup_compute_main
 from commands.dedup_find_duplicates import main as dedup_find_main
 
 
+def write_lookup(path: Path, entries: list[tuple[str, str]]) -> None:
+    """Write a per-shard lookup sidecar (TSV of member -> representative)."""
+    path.write_text("".join(f"{member}\t{rep}\n" for member, rep in entries))
+
+
 class TestDedupAnnotateCLI:
     def test_annotates_books(self, tmp_path: Path):
-        """Test that CLI reads shard and clusters, writes annotated books."""
+        """Test that CLI reads shard and lookup, writes annotated books."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -27,17 +33,12 @@ class TestDedupAnnotateCLI:
             },
         ]
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
-
-        clusters = {
-            "clusters": {},
-                        "statistics": {"total_records": 2},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -49,7 +50,7 @@ class TestDedupAnnotateCLI:
     def test_marks_duplicates(self, tmp_path: Path):
         """Test that duplicate paragraphs are marked correctly."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -61,16 +62,12 @@ class TestDedupAnnotateCLI:
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
 
         # book1.0 is a duplicate of book2.5 (representative)
-        clusters = {
-            "clusters": {"book2.5": ["book2.5", "book1.0"]},
-                        "statistics": {"total_records": 2},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [("book1.0", "book2.5")])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -82,7 +79,7 @@ class TestDedupAnnotateCLI:
     def test_marks_representatives(self, tmp_path: Path):
         """Test that cluster representatives are marked correctly."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -94,16 +91,12 @@ class TestDedupAnnotateCLI:
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
 
         # book1.0 is the representative of its cluster
-        clusters = {
-            "clusters": {"book1.0": ["book1.0", "book2.3"]},
-                        "statistics": {"total_records": 2},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [("book1.0", "book1.0")])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -115,7 +108,7 @@ class TestDedupAnnotateCLI:
     def test_preserves_other_fields(self, tmp_path: Path):
         """Test that other book fields are preserved."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -127,17 +120,12 @@ class TestDedupAnnotateCLI:
             },
         ]
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
-
-        clusters = {
-            "clusters": {},
-                        "statistics": {"total_records": 1},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -149,7 +137,7 @@ class TestDedupAnnotateCLI:
     def test_processes_multiple_books(self, tmp_path: Path):
         """Test that multiple books are processed correctly."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -169,17 +157,12 @@ class TestDedupAnnotateCLI:
             },
         ]
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
-
-        clusters = {
-            "clusters": {},
-                        "statistics": {"total_records": 3},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -193,7 +176,7 @@ class TestDedupAnnotateCLI:
     def test_overwrites_shard_file(self, tmp_path: Path):
         """Test that shard file is overwritten (not appended to)."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "clusters.json"
+        lookup_file = tmp_path / "shard.lookup.jsonl"
 
         books = [
             {
@@ -203,22 +186,17 @@ class TestDedupAnnotateCLI:
             },
         ]
         shard_file.write_text("\n".join(json.dumps(b) for b in books))
-
-        clusters = {
-            "clusters": {},
-                        "statistics": {"total_records": 1},
-        }
-        clusters_file.write_text(json.dumps(clusters))
+        write_lookup(lookup_file, [])
 
         runner = CliRunner()
         # Run twice
         runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code == 0
@@ -230,23 +208,21 @@ class TestDedupAnnotateCLI:
     def test_fails_on_missing_shard_file(self, tmp_path: Path):
         """Test that CLI fails when shard file doesn't exist."""
         shard_file = tmp_path / "nonexistent.jsonl"
-        clusters_file = tmp_path / "clusters.json"
-
-        clusters = {"clusters": {},  "statistics": {}}
-        clusters_file.write_text(json.dumps(clusters))
+        lookup_file = tmp_path / "shard.lookup.jsonl"
+        write_lookup(lookup_file, [])
 
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code != 0
 
-    def test_fails_on_missing_clusters_file(self, tmp_path: Path):
-        """Test that CLI fails when clusters file doesn't exist."""
+    def test_fails_on_missing_lookup_file(self, tmp_path: Path):
+        """Test that CLI fails when lookup file doesn't exist."""
         shard_file = tmp_path / "shard.complete.jsonl"
-        clusters_file = tmp_path / "nonexistent.json"
+        lookup_file = tmp_path / "nonexistent.lookup.jsonl"
 
         books = [{"barcode_src": "book1", "subtopic_paragraph_start_indices": [0]}]
         shard_file.write_text(json.dumps(books[0]))
@@ -254,7 +230,7 @@ class TestDedupAnnotateCLI:
         runner = CliRunner()
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            ["--shard-file", str(shard_file), "--lookup-file", str(lookup_file)],
         )
 
         assert result.exit_code != 0
@@ -269,6 +245,7 @@ class TestDedupEndToEnd:
         simhash_dir.mkdir()
         simhash_file = simhash_dir / "shard.simhashes.jsonl"
         clusters_file = tmp_path / "clusters.json"
+        lookup_dir = tmp_path / "lookups"
 
         # Create books with known paragraph counts
         books = [
@@ -315,10 +292,24 @@ class TestDedupEndToEnd:
         )
         assert result.exit_code == 0
 
-        # Phase 3: Annotate
+        # Phase 3: Build per-shard lookup sidecars
+        result = runner.invoke(
+            dedup_build_lookup_main,
+            [
+                "--shard-dir", str(tmp_path),
+                "--clusters-file", str(clusters_file),
+                "--output-dir", str(lookup_dir),
+            ],
+        )
+        assert result.exit_code == 0
+
+        # Phase 4: Annotate
         result = runner.invoke(
             dedup_annotate_main,
-            ["--shard-file", str(shard_file), "--clusters-file", str(clusters_file)],
+            [
+                "--shard-file", str(shard_file),
+                "--lookup-file", str(lookup_dir / "shard.lookup.jsonl"),
+            ],
         )
         assert result.exit_code == 0
 

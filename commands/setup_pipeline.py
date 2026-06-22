@@ -10,6 +10,7 @@ In a standard workflow, this should be run after `prepare_shards.py`.
 Institutional Books - Enriched Text - 2026
 """
 
+import re
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -24,7 +25,7 @@ from const.config import PipelineConfig, load_config
 from const.languages import is_nupunkt_language
 from const.types import BookJSON, BooksByLangDict, HardNormText, RawPage
 from library.denoise.ngrams import build_ngram_stats, save_ngram_stats
-from library.denoise.uniformize import normalize_text
+from library.denoise.uniformize import normalize_text, normalize_unicode_in_page
 from utils.jsonl_io import iter_jsonl
 
 
@@ -63,12 +64,29 @@ def extract_pages_from_book(book: BookJSON) -> list[RawPage]:
     return pages
 
 
+def soft_normalize_page_for_nupunkt(raw_page: RawPage) -> str:
+    """
+    Normalize a page the way the Nupunkt segmenter sees text at inference time.
+
+    Mirrors step-1 uniformization (light/NFC normalization via
+    normalize_unicode_in_page) followed by the segmenter's newline flattening
+    (cf. segment_book_nupunkt in library/segment/nupunkt_segmenter.py), so the
+    Nupunkt training corpus uses the same normalization as middlematter at
+    segmentation -- NOT the hard/NFKC normalization used for the n-gram models.
+    """
+    soft_page = normalize_unicode_in_page(raw_page)
+    return re.sub(r" +", " ", soft_page.replace("\n", " ")).strip()
+
+
 def build_nupunkt_corpus_from_books(
     books: list[BookJSON],
     output_path: Path,
 ) -> int:
     """
-    Build training corpus from book records.
+    Build the Nupunkt training corpus (one soft-normalized page per line).
+
+    Uses soft (light/NFC) normalization to match the normalization applied to
+    middlematter at segmentation time, keeping training and inference consistent.
 
     Returns the total number of nonempty pages in this corpus.
     """
@@ -81,10 +99,10 @@ def build_nupunkt_corpus_from_books(
             for page in pages:
                 if not page:
                     continue
-                page_tokens = normalize_text(page)
-                if not page_tokens:  # e.g. if page only had whitespace
+                page_text = soft_normalize_page_for_nupunkt(page)
+                if not page_text:  # e.g. if page only had whitespace
                     continue
-                out.write(page_tokens + "\n")
+                out.write(page_text + "\n")
                 lines_written += 1
 
     # TODO: log appropriate statistics

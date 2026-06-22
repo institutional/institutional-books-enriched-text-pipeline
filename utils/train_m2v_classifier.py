@@ -15,12 +15,15 @@ from loguru import logger
 from model2vec.train import StaticModelForClassification
 from sklearn.model_selection import train_test_split  # type: ignore
 
+from library.denoise.uniformize import normalize_unicode_in_page
+
 
 @no_type_check
 def load_and_split_json(jsonl_path, test_size=0.2, seed=42):
     """
     Load a JSONL dataset (list of dicts with 'content' and 'target') and split into train/test sets.
-    Applies oversampling to test set to balance classes.
+    Applies oversampling to the training set to balance classes; the test set is
+    left at its natural class distribution so metrics reflect real inference.
 
     Outputs (X_train, y_train, X_test, y_test).
     """
@@ -28,22 +31,24 @@ def load_and_split_json(jsonl_path, test_size=0.2, seed=42):
     with open(jsonl_path, encoding="utf-8") as f:
         lines = f.readlines()
     data = [json.loads(line) for line in lines]
-    X = [ex["content"] for ex in data]
+    # Defensively apply the same light/NFC page normalization the classifiers
+    # receive at inference (uniformized_text via normalize_unicode_in_page), so
+    # training does not depend on however the training-data content was produced.
+    X = [normalize_unicode_in_page(ex["content"]) for ex in data]
     y = [ex["target"] for ex in data]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=seed
     )
 
-    # Apply oversampling to test set to balance classes
+    # Oversample the TRAINING set to balance classes. The test set is left at its
+    # natural class distribution so evaluation reflects real inference conditions.
     oversampler = RandomOverSampler(random_state=seed)
-    # Create indices for oversampling
-    X_test_indices = list(range(len(X_test)))
-    X_test_indices_resampled, y_test_resampled = oversampler.fit_resample(
-        [[i] for i in X_test_indices], y_test
+    train_indices = [[i] for i in range(len(X_train))]
+    train_indices_resampled, y_train_resampled = oversampler.fit_resample(
+        train_indices, y_train
     )
-    X_test_resampled = [X_test[idx[0]] for idx in X_test_indices_resampled]
-    y_test = y_test_resampled
-    X_test = X_test_resampled
+    X_train = [X_train[idx[0]] for idx in train_indices_resampled]
+    y_train = y_train_resampled
     logger.info("JSONL loaded.")
 
     return X_train, y_train, X_test, y_test

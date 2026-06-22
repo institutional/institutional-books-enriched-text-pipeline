@@ -1,10 +1,16 @@
 """
 dedup_annotate.py - Annotate books with duplicate information.
 
-This is phase 3 of the deduplication workflow:
+This is phase 4 of the deduplication workflow:
 1. Compute simhashes
-2. Find duplicates
-3. Annotate (this step)
+2. Find duplicates       -> clusters.json
+3. Build lookups         -> <shard>.lookup.jsonl per shard
+4. Annotate (this step)  -> reads only its shard's lookup sidecar
+
+Each book's paragraph doc_ids are looked up in the shard's lookup file (a TSV
+of "<member_doc_id>\\t<representative_doc_id>" produced by dedup_build_lookup).
+A doc_id mapped to itself is a cluster representative; one mapped to a different
+doc_id is a duplicate of that representative.
 
 Institutional Books - Enriched Text - 2026
 """
@@ -13,7 +19,6 @@ import json
 from pathlib import Path
 
 import click
-import ijson
 from loguru import logger
 
 from const.types import BookJSON
@@ -66,12 +71,12 @@ def annotate_book(
     help="Shard JSONL file to annotate (will be overwritten)",
 )
 @click.option(
-    "--clusters-file",
-    type=click.Path(exists=True, path_type=Path),
+    "--lookup-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
     required=True,
-    help="Clusters JSON file from dedup_find_duplicates",
+    help="Per-shard lookup sidecar from dedup_build_lookup",
 )
-def main(shard_file: Path, clusters_file: Path):
+def main(shard_file: Path, lookup_file: Path):
     """
     Annotate books in a shard with duplicate information.
 
@@ -80,42 +85,21 @@ def main(shard_file: Path, clusters_file: Path):
     Example:
         python -m commands.dedup_annotate \\
             --shard-file DATA/shards/processed/shard0001.complete.jsonl \\
-            --clusters-file DATA/dedup/clusters.json
+            --lookup-file DATA/dedup/lookups/shard0001.lookup.jsonl
     """
-    ## Low Memory Strategy ##
-    #
-    # In practice, the clusters.json file may be large and there may be many
-    # shards we want to process in parallel. For each shard, we identify
-    # barcodes we care about. Then we stream the clusters.json file and keep
-    # only the relevant portions. And then we process the shard in place.
-
-    # Identify relevant barcodes
-    shard_barcodes: set[str] = set()
-    with open(shard_file) as f:
-        for line in f:
-            barcode = json.loads(line).get("barcode_src", "")
-            if barcode:
-                shard_barcodes.add(barcode)
-    logger.info(f"Found {len(shard_barcodes)} barcodes in shard")
-
-    # Extract relevant portions from clusters file
+    # Load this shard's doc_id -> representative lookup. The sidecar is already
+    # filtered to barcodes owned by this shard (see dedup_build_lookup), so it is
+    # small and needs no scanning of the global clusters.json.
     doc_to_rep: dict[str, str] = {}
-    clusters_scanned = 0
-    with open(clusters_file, "rb") as f:
-        for rep, members in ijson.kvitems(f, "clusters"):
-            clusters_scanned += 1
-            # Check if any member belongs to this shard
-            relevant = [m for m in members if m.rsplit(".", 1)[0] in shard_barcodes]
-            if relevant:
-                for m in relevant:
-                    doc_to_rep[m] = rep
-            if clusters_scanned % 5_000_000 == 0:
-                logger.info(f"Scanned {clusters_scanned} clusters, kept {len(doc_to_rep)} entries")
+    with open(lookup_file) as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            member, rep = line.split("\t")
+            doc_to_rep[member] = rep
 
-    logger.info(
-        f"Scanned {clusters_scanned} clusters, "
-        + f"built lookup with {len(doc_to_rep)} entries for this shard"
-    )
+    logger.info(f"Loaded {len(doc_to_rep)} lookup entries from {lookup_file}")
 
     # Process books
     complete_books: list[BookJSON] = []
