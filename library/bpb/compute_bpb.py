@@ -17,9 +17,7 @@ from library.chunk.utils import segments_from_starts
 LOG2 = math.log(2)
 
 
-def load_bpb_model(
-    model_name: str, device: str
-) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
+def load_bpb_model(model_name: str, device: str) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
     """Load a causal LM model and tokenizer for BPB computation."""
     logger.info(f"Loading model {model_name} and tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -153,6 +151,8 @@ def compute_bpb_batched(
                     logger.warning(
                         f"Batch of {len(text_slice)} failed ({e}), falling back to sequential"
                     )
+                    # Release this failed batch's memory
+                    input_ids = attention_mask = outputs = logits = logits_f32 = None  # noqa: F841
                     if device == "cuda":
                         torch.cuda.empty_cache()
                     for j, text in enumerate(text_slice):
@@ -204,8 +204,6 @@ def compute_bpb_in_book(
         " ".join(segments) for segments in segments_from_starts(sentences, para_starts)
     ]
 
-    bpb_values = compute_bpb_batched(
-        paragraphs, model, tokenizer, device, batch_size=batch_size
-    )
+    bpb_values = compute_bpb_batched(paragraphs, model, tokenizer, device, batch_size=batch_size)
 
     return BookBPB(book_id=book_id, bpb_values=bpb_values)
