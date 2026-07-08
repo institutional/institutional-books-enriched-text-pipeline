@@ -101,9 +101,11 @@ class TestRemoveZeroWidth:
         """Zero-width space should be removed."""
         assert remove_zero_width("hello\u200bworld") == "helloworld"
 
-    def test_zero_width_joiner(self):
-        """Zero-width joiner should be removed."""
-        assert remove_zero_width("a\u200db") == "ab"
+    def test_zero_width_joiner_preserved(self):
+        """Zero-width joiner/non-joiner are intentionally NOT removed: they are
+        semantically meaningful (emoji sequences, Indic/Arabic shaping)."""
+        assert remove_zero_width("a\u200db") == "a\u200db"
+        assert remove_zero_width("a\u200cb") == "a\u200cb"
 
     def test_bom(self):
         """BOM (zero-width no-break space) should be removed."""
@@ -116,9 +118,10 @@ class TestRemoveZeroWidth:
             assert result == "ab", f"Failed for U+{ord(zw_char):04X}"
 
     def test_multiple_zero_width(self):
-        """Multiple zero-width characters should all be removed."""
+        """Removable zero-width chars (U+200B, BOM) are stripped; the
+        non-joiner (U+200C) is intentionally preserved."""
         text = "\ufeffhello\u200bworld\u200c!"
-        assert remove_zero_width(text) == "helloworld!"
+        assert remove_zero_width(text) == "helloworld\u200c!"
 
     def test_empty_string(self):
         """Empty string should return empty."""

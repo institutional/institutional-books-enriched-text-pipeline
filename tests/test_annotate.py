@@ -266,6 +266,38 @@ class TestAnnotateMiddlematter:
         assert 'data-cluster="bookX:10"' in result
         assert result.count("<aside") == 2
 
+    def test_section_bpb_no_double_count_first_duplicate(self):
+        """Each paragraph in a duplicate run counts once toward the section mean.
+
+        Regression: the first paragraph of a duplicate run used to be counted twice
+        (once at the top of the loop and once inside the duplicate branch)."""
+        book = {
+            "barcode_src": "book1",
+            "middlematter_sentences": ["Dup1.", "Dup2.", "Dup3."],
+            "subtopic_paragraph_start_indices": [0, 1, 2],
+            "subtopic_section_start_indices": [0],
+            "duplicate_paragraphs": {"0": "bookX:5", "1": "bookX:6", "2": "bookX:7"},
+        }
+        result, _ = annotate_middlematter(book, bpb_values=[3.0, 6.0, 9.0])
+        # correct mean = (3+6+9)/3 = 6.0; the old double-count gave (3+3+6+9)/4 = 5.25
+        assert '<section data-bpb="6.0000">' in result
+        assert "5.2500" not in result
+
+    def test_section_bpb_excludes_removed_paragraphs(self):
+        """A removed paragraph's bpb must not contribute to the section mean, since
+        it is dropped from the output entirely."""
+        book = {
+            "barcode_src": "book1",
+            "middlematter_sentences": ["Keep one.", "Remove me.", "Keep two."],
+            "subtopic_paragraph_start_indices": [0, 1, 2],
+            "subtopic_section_start_indices": [0],
+            "removed_paragraphs": {"1": True},
+        }
+        result, _ = annotate_middlematter(book, bpb_values=[2.0, 100.0, 4.0])
+        # removed para (100.0) excluded: mean = (2+4)/2 = 3.0, not (2+100+4)/3
+        assert '<section data-bpb="3.0000">' in result
+        assert result.count("<p") == 2  # removed paragraph is not emitted
+
     def test_multiple_sections(self):
         book = {
             "barcode_src": "test",

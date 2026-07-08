@@ -50,6 +50,7 @@ def is_probable_stray_number_fragment(
     fragment: str,
     threshold: float = 0.9,
     min_length: int = 2,
+    max_length: int = 10,
 ) -> bool:
     """
     Returns True if the given fragment is likely to be a stray number fragment.
@@ -61,6 +62,8 @@ def is_probable_stray_number_fragment(
     one nonnumeric character, it's probably a stray number fragment.
     """
     if len(fragment) < min_length:
+        return False
+    if len(fragment) > max_length:
         return False
     numeric, nonnumeric = numeric_count(fragment)
     total = numeric + nonnumeric

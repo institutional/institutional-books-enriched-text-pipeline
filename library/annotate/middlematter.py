@@ -102,9 +102,7 @@ def annotate_middlematter(
 
     # Extract all paragraph texts for language detection
     num_paras = len(para_starts)
-    all_para_texts = [
-        get_paragraph_text(sentences, para_starts, i) for i in range(num_paras)
-    ]
+    all_para_texts = [get_paragraph_text(sentences, para_starts, i) for i in range(num_paras)]
 
     # Detect languages with propagation
     languages = detect_paragraph_languages(all_para_texts)
@@ -121,14 +119,17 @@ def annotate_middlematter(
 
         while para_idx < end_para:
             para_text = get_paragraph_text(sentences, para_starts, para_idx)
-            para_bpb = (
-                bpb_values[para_idx] if bpb_values and para_idx < len(bpb_values) else None
-            )
-
-            if para_bpb is not None and para_bpb > 0:
-                section_bpbs.append(para_bpb)
+            para_bpb = bpb_values[para_idx] if bpb_values and para_idx < len(bpb_values) else None
 
             str_idx = str(para_idx)
+
+            if (
+                para_bpb is not None
+                and para_bpb > 0
+                and str_idx not in removed_paras
+                and str_idx not in duplicate_paras
+            ):
+                section_bpbs.append(para_bpb)
 
             if str_idx in removed_paras:
                 para_idx += 1
@@ -152,7 +153,11 @@ def annotate_middlematter(
                 first_ref_book, first_ref_para = first_ref.rsplit(":", 1)
                 ref_para = int(first_ref_para)
 
-                while para_idx < end_para and str(para_idx) in duplicate_paras and str(para_idx) not in removed_paras:
+                while (
+                    para_idx < end_para
+                    and str(para_idx) in duplicate_paras
+                    and str(para_idx) not in removed_paras
+                ):
                     ref = duplicate_paras[str(para_idx)]
                     ref_book, ref_p = ref.rsplit(":", 1)
                     expected_para = ref_para + (para_idx - start_dup)
@@ -162,17 +167,13 @@ def annotate_middlematter(
 
                     d_text = get_paragraph_text(sentences, para_starts, para_idx)
                     d_bpb = (
-                        bpb_values[para_idx]
-                        if bpb_values and para_idx < len(bpb_values)
-                        else None
+                        bpb_values[para_idx] if bpb_values and para_idx < len(bpb_values) else None
                     )
                     d_bpb_valid = d_bpb if d_bpb and d_bpb > 0 else None
                     if d_bpb is not None and d_bpb > 0:
                         section_bpbs.append(d_bpb)
                     d_lang = languages[para_idx] if para_idx < len(languages) else None
-                    dup_paras_tags.append(
-                        build_paragraph_tag(d_text, d_bpb_valid, d_lang)
-                    )
+                    dup_paras_tags.append(build_paragraph_tag(d_text, d_bpb_valid, d_lang))
                     para_idx += 1
 
                 last_ref_para = ref_para + len(dup_paras_tags) - 1

@@ -147,11 +147,11 @@ def compute_text_stats(book: BookJSON) -> TextStats:
     token_count = count_tokens(text, encoder)
     char_count = len(text)
 
-    # Use polyglot for word/sentence segmentation
-    words, polyglot_sentences = get_words_and_sentences(text, language)
+    # from polyglot
+    words, _ = get_words_and_sentences(text, language)
 
     word_count = len(words)
-    sentence_count = len(polyglot_sentences) if polyglot_sentences else len(sentences)
+    sentence_count = len(sentences)
     paragraph_count = len(para_starts) if para_starts else 0
     section_count = len(section_starts) if section_starts else 0
 
