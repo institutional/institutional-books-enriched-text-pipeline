@@ -1,10 +1,6 @@
 """
 Extract per-book metadata from parquet shards for use in cluster analysis.
 
-Reads only the columns needed (barcode, language, paragraph count) from the
-parquet files, which is fast thanks to columnar storage. Outputs a compact
-JSON Lines file with one row per book.
-
 Usage:
     python scripts/extract_book_metadata.py \
         --parquet-dir DATA/Cluster/parquet_shards \
@@ -27,9 +23,7 @@ from tqdm import tqdm
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Extract per-book metadata from parquet shards"
-    )
+    parser = argparse.ArgumentParser(description="Extract per-book metadata from parquet shards")
     parser.add_argument(
         "--parquet-dir",
         type=Path,
@@ -69,7 +63,6 @@ def main():
                 language = languages[i].as_py()
 
                 # Number of paragraphs = length of paragraph start indices
-                # (each index marks the start of a paragraph in the sentences list)
                 starts = para_starts[i].as_py()
                 n_paragraphs = len(starts) if starts else 0
 

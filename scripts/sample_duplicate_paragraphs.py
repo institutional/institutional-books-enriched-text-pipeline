@@ -2,7 +2,8 @@
 Sample duplicate clusters and display the actual paragraph text.
 
 Picks clusters across different size categories, looks up the paragraph text
-from parquet shard files, and prints them side by side for inspection.
+from parquet shard files, and prints them side by side for inspection. Useful
+for EDA.
 
 Usage:
     python scripts/sample_duplicate_paragraphs.py \
@@ -28,7 +29,6 @@ Institutional Books - Enriched Text - 2026
 from __future__ import annotations
 
 import argparse
-import json
 import random
 import sys
 import textwrap
@@ -107,10 +107,11 @@ def sample_clusters(
             if j < samples_per_size:
                 reservoirs[size][j] = (rep_id, members)
 
-    print(f"  Sampled from {sum(counts.values()):,} matching clusters"
-          f" across {len(reservoirs)} size categories.")
+    print(
+        f"  Sampled from {sum(counts.values()):,} matching clusters"
+        f" across {len(reservoirs)} size categories."
+    )
     return reservoirs
-
 
 
 BOOK_COLUMNS = ["barcode_src", "middlematter_sentences", "subtopic_paragraph_start_indices"]
@@ -155,26 +156,35 @@ def main():
     parser.add_argument("clusters_file", type=Path)
     parser.add_argument("--parquet-dir", type=Path, required=True)
     parser.add_argument(
-        "--samples-per-size", type=int, default=3,
+        "--samples-per-size",
+        type=int,
+        default=3,
         help="Number of sample clusters per size category (default: 3)",
     )
     parser.add_argument(
-        "--cluster-size", type=int, default=None,
+        "--cluster-size",
+        type=int,
+        default=None,
         help="Only sample clusters of this exact size",
     )
     parser.add_argument(
-        "--cross-book-only", action="store_true",
+        "--cross-book-only",
+        action="store_true",
         help="Only sample clusters spanning multiple books",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
-        "--max-text-len", type=int, default=500,
+        "--max-text-len",
+        type=int,
+        default=500,
         help="Max characters to display per paragraph (default: 500)",
     )
     parser.add_argument(
-        "--max-sizes", type=int, default=10,
+        "--max-sizes",
+        type=int,
+        default=10,
         help="Max number of size categories to display (default: 10). "
-             "Picks a spread: smallest, largest, and evenly spaced in between.",
+        "Picks a spread: smallest, largest, and evenly spaced in between.",
     )
     args = parser.parse_args()
 
@@ -195,8 +205,9 @@ def main():
     all_sizes = sorted(reservoirs.keys())
     if len(all_sizes) > args.max_sizes:
         # Always include smallest and largest, spread the rest evenly
-        indices = [int(i * (len(all_sizes) - 1) / (args.max_sizes - 1))
-                   for i in range(args.max_sizes)]
+        indices = [
+            int(i * (len(all_sizes) - 1) / (args.max_sizes - 1)) for i in range(args.max_sizes)
+        ]
         keep = {all_sizes[i] for i in indices}
         reservoirs = {sz: samples for sz, samples in reservoirs.items() if sz in keep}
         print(f"  Trimmed to {len(reservoirs)} size categories: {sorted(reservoirs.keys())}")
@@ -241,9 +252,9 @@ def main():
 
     for size in sorted(reservoirs.keys()):
         samples = reservoirs[size]
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"  CLUSTER SIZE: {size}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for sample_idx, (rep_id, members) in enumerate(samples):
             parsed = [parse_cluster_id(m) for m in members]
@@ -264,13 +275,13 @@ def main():
                     print("      (paragraph not found)")
                     continue
 
-                display = text[:args.max_text_len]
+                display = text[: args.max_text_len]
                 if len(text) > args.max_text_len:
                     display += "..."
                 for line in wrapper.wrap(display):
                     print(line)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
 
 
 if __name__ == "__main__":

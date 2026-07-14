@@ -1,4 +1,5 @@
-"""Find and analyze the largest duplicate clusters.
+"""
+find_large_clusters.py - find and analyze the largest duplicate clusters
 
 Institutional Books - Enriched Text - 2026
 """
@@ -67,12 +68,11 @@ def main():
     print(f"\nFound {len(clusters)} clusters with size >= 50\n")
     analyze_top_clusters(clusters, 50)
 
-    # Also write full list to file for later analysis
+    # Hack: dump to file for later investigation.
     output_path = "scripts/large_clusters_top100.jsonl"
     with open(output_path, "w") as f:
         for cluster in clusters[:100]:
             f.write(json.dumps(cluster) + "\n")
-
     print(f"\nWrote top 100 clusters to {output_path}")
 
 

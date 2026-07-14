@@ -67,8 +67,7 @@ def find_clusters(clusters_path: Path, cluster_ids: set[str]) -> dict[str, list[
         for prefix, event, value in parser:
             if prefix == "clusters" and event == "map_key":
                 if current_key is not None and (
-                    current_key in remaining
-                    or remaining & set(current_members)
+                    current_key in remaining or remaining & set(current_members)
                 ):
                     # Match by key or by any member
                     matched = {current_key} | (remaining & set(current_members))
@@ -82,8 +81,7 @@ def find_clusters(clusters_path: Path, cluster_ids: set[str]) -> dict[str, list[
 
         # Check last cluster
         if current_key is not None and (
-            current_key in remaining
-            or remaining & set(current_members)
+            current_key in remaining or remaining & set(current_members)
         ):
             matched = {current_key} | (remaining & set(current_members))
             for match_id in matched:
@@ -134,22 +132,25 @@ def extract_paragraph(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Print paragraphs in a specific duplicate cluster"
-    )
+    parser = argparse.ArgumentParser(description="Print paragraphs in a specific duplicate cluster")
     parser.add_argument(
-        "cluster_ids", nargs="+",
+        "cluster_ids",
+        nargs="+",
         help="Cluster IDs to look up (e.g. 32044098672728.587)",
     )
     parser.add_argument("--clusters-file", type=Path, required=True)
     parser.add_argument("--parquet-dir", type=Path, required=True)
     parser.add_argument("--barcode-index", type=Path, required=True)
     parser.add_argument(
-        "--max-text-len", type=int, default=0,
+        "--max-text-len",
+        type=int,
+        default=0,
         help="Max characters per paragraph (0 = no limit, default: 0)",
     )
     parser.add_argument(
-        "--max-members", type=int, default=20,
+        "--max-members",
+        type=int,
+        default=20,
         help="Max members to display per cluster (0 = all, default: 20)",
     )
     args = parser.parse_args()
@@ -160,8 +161,7 @@ def main():
 
     # Find the requested clusters
     requested = set(args.cluster_ids)
-    print(f"Searching for {len(requested)} cluster(s) in {args.clusters_file} ...",
-          file=sys.stderr)
+    print(f"Searching for {len(requested)} cluster(s) in {args.clusters_file} ...", file=sys.stderr)
     found = find_clusters(args.clusters_file, requested)
 
     not_found = requested - set(found.keys())
@@ -177,8 +177,10 @@ def main():
     for cluster_id in list(found.keys()):
         members = found[cluster_id]
         if max_m > 0 and len(members) > max_m:
-            print(f"  Cluster {cluster_id}: showing {max_m} of {len(members)} members",
-                  file=sys.stderr)
+            print(
+                f"  Cluster {cluster_id}: showing {max_m} of {len(members)} members",
+                file=sys.stderr,
+            )
             found[cluster_id] = members[:max_m]
 
     # Load needed books
@@ -204,12 +206,12 @@ def main():
         books = {bc for bc, _ in parsed}
         scope = "within-book" if len(books) == 1 else f"cross-book ({len(books)} books)"
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Cluster: {cluster_id}  ({len(members)} members, {scope})")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for i, (barcode, para_idx) in enumerate(parsed):
-            print(f"\n  [{i+1}] {barcode} paragraph {para_idx}")
+            print(f"\n  [{i + 1}] {barcode} paragraph {para_idx}")
 
             text = extract_paragraph(barcode, para_idx, book_cache)
             if text is None:
@@ -222,7 +224,7 @@ def main():
                 continue
 
             if args.max_text_len > 0 and len(text) > args.max_text_len:
-                text = text[:args.max_text_len] + "..."
+                text = text[: args.max_text_len] + "..."
 
             for line in wrapper.wrap(text):
                 print(line)

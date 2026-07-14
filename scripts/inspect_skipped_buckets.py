@@ -1,5 +1,9 @@
 """
-Inspect skipped buckets from dedup_find_duplicates.
+inspect_skipped_buckets.py - look at too-large buckets
+
+NOTE: After running this script, I bumped the threshold for skipping duplicate
+identification buckets to 30k. Now no buckets are skipped. But this script was
+used to help determine that I could bump the threshold.
 
 Loads the book index from simhash files, then decodes doc indices
 from the skipped buckets JSONL into human-readable book_id.paragraph_idx
@@ -79,8 +83,10 @@ def main(simhash_dir: Path, skipped_file: Path, sample_size: int) -> None:
                 book_i = bisect.bisect_right(book_offsets, idx) - 1
                 unique_books.add(book_ids[book_i])
 
-            print(f"Bucket {i + 1}: band_idx={band_idx}, band_value={band_value}, "
-                  f"size={size:,}, unique_books={len(unique_books):,}")
+            print(
+                f"Bucket {i + 1}: band_idx={band_idx}, band_value={band_value}, "
+                f"size={size:,}, unique_books={len(unique_books):,}"
+            )
             for doc_id in sample_ids:
                 print(f"  {doc_id}")
             print()

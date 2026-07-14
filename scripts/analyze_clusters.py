@@ -1,10 +1,7 @@
 """
 Analyze duplicate clusters from dedup_find_duplicates output.
 
-Streams the clusters.json file to avoid loading ~5GB into memory at once.
-Produces summary statistics and detailed breakdowns.
-
-Usage:
+Basic usage:
     python scripts/analyze_clusters.py DATA/Cluster/clusters.json
     python scripts/analyze_clusters.py DATA/Cluster/clusters.json --top-pairs 50
     python scripts/analyze_clusters.py DATA/Cluster/clusters.json \\
@@ -37,12 +34,10 @@ def parse_cluster_id(doc_id: str) -> tuple[str, int]:
 
 def stream_clusters(path: Path):
     """
-    Stream clusters from clusters.json using ijson (SAX-style parsing).
-
     Yields (representative_id, [member_id, ...]) tuples.
     """
     with open(path, "rb") as f:
-        # ijson iterates over "clusters.KEY.item" entries
+        # We use ijson to be nice to RAM, but this isn't *truly* necessary
         parser = ijson.parse(f)
         current_key = None
         current_members: list[str] = []
@@ -56,7 +51,6 @@ def stream_clusters(path: Path):
             elif prefix.startswith("clusters.") and event == "string":
                 current_members.append(value)
 
-        # Yield last cluster
         if current_key is not None:
             yield current_key, current_members
 
@@ -91,7 +85,7 @@ class BookUnionFind:
         if x not in self.parent:
             self.parent[x] = x
             self.rep_id[x] = ""
-        while self.parent[x] != x:
+        while self.parent[x] != x:  # collapse for efficiency
             self.parent[x] = self.parent[self.parent[x]]
             x = self.parent[x]
         return x
@@ -108,6 +102,7 @@ class BookUnionFind:
             elif self.rep_id.get(ra):
                 self.rep_id[rb] = self.rep_id[ra]
 
+    # lol typing
     def get_components(self) -> tuple[dict[str, list[str]], dict[str, str]]:
         components: dict[str, list[str]] = {}
         rep_ids: dict[str, str] = {}
@@ -121,7 +116,9 @@ class BookUnionFind:
 def main():
     parser = argparse.ArgumentParser(description="Analyze dedup clusters")
     parser.add_argument("clusters_file", type=Path)
-    parser.add_argument("--top-pairs", type=int, default=30, help="Number of top book pairs to show")
+    parser.add_argument(
+        "--top-pairs", type=int, default=30, help="Number of top book pairs to show"
+    )
     parser.add_argument("--top-books", type=int, default=30, help="Number of top books to show")
     parser.add_argument(
         "--book-metadata",
@@ -146,23 +143,23 @@ def main():
     if args.book_metadata:
         book_meta = load_book_metadata(args.book_metadata)
 
-    # ── Accumulators ──
-    cluster_sizes: Counter[int] = Counter()  # size → count
+    cluster_sizes: Counter[int] = Counter()
     books_with_cross_dupes: set[str] = set()  # books in any cross-book cluster
     books_with_within_dupes: set[str] = set()  # books in any within-book cluster
-    book_cross_dup_count: Counter[str] = Counter()  # barcode → paragraphs in cross-book clusters
-    book_within_dup_count: Counter[str] = Counter()  # barcode → paragraphs in within-book clusters
-    book_pair_shared: Counter[tuple[str, str]] = Counter()  # (book_a, book_b) → shared paragraphs
-    book_pair_rep_ids: dict[tuple[str, str], list[str]] = {}  # (book_a, book_b) → cluster IDs
+    book_cross_dup_count: Counter[str] = Counter()  # barcode to paragraphs in cross-book clusters
+    book_within_dup_count: Counter[str] = Counter()  # barcode to paragraphs in within-book clusters
+    book_pair_shared: Counter[tuple[str, str]] = Counter()  # (book_a, book_b) to shared paragraphs
+    book_pair_rep_ids: dict[tuple[str, str], list[str]] = {}  # (book_a, book_b) to cluster IDs
     cross_book_clusters = 0
     within_book_clusters = 0
-    para_indices: list[int] = []  # sample of paragraph indices (capped)
-    cluster_book_span: Counter[int] = Counter()  # num distinct books in cluster → count
+    para_indices: list[int] = []  # sample of paragraph indices
+    cluster_book_span: Counter[int] = Counter()  # num distinct books in cluster to count
     total_dup_paragraphs = 0
     max_cluster_size = 0
     max_cluster_id = ""
 
-    PARA_INDEX_SAMPLE_LIMIT = 5_000_000  # cap to avoid memory issues
+    # Hard limit on samples of paragraphs
+    PARA_INDEX_SAMPLE_LIMIT = 5_000_000
 
     print(f"Streaming clusters from {args.clusters_file} ...")
     n_clusters = 0

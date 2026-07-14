@@ -1,8 +1,8 @@
 """
-Build a barcode -> parquet file index for fast book lookups.
+Build a barcode -> parquet file index for fast book lookup.
 
-Reads only the barcode_src column from each parquet file (fast, columnar read)
-and writes a compact JSON mapping.
+This is a simple script that makes reverse shard manipulation across a sharded
+dataset easier.
 
 Usage:
     python scripts/build_barcode_index.py \
