@@ -177,7 +177,6 @@ def main():
             max_cluster_size = size
             max_cluster_id = rep_id
 
-        # Parse all members
         parsed = [parse_cluster_id(m) for m in members]
         books_in_cluster: set[str] = set()
 
@@ -190,11 +189,13 @@ def main():
         cluster_book_span[distinct_books] += 1
 
         if distinct_books == 1:
+            # only matches in a single book
             within_book_clusters += 1
             for barcode, _ in parsed:
                 books_with_within_dupes.add(barcode)
                 book_within_dup_count[barcode] += 1
         else:
+            # matches across multiple books
             cross_book_clusters += 1
             for barcode, _ in parsed:
                 books_with_cross_dupes.add(barcode)
@@ -215,7 +216,7 @@ def main():
 
     print(f"  Done. Processed {n_clusters:,} clusters.\n")
 
-    # ── Report ──
+    # REPORT #
 
     print("=" * 70)
     print("DUPLICATE CLUSTER ANALYSIS")
@@ -228,7 +229,7 @@ def main():
     book_total_dup_count.update(book_cross_dup_count)
     book_total_dup_count.update(book_within_dup_count)
 
-    # 1. High-level stats
+    # High-level stats
     print("\n--- Overview ---")
     print(f"  Total clusters:                        {n_clusters:,}")
     print(f"  Total duplicate paragraphs:            {total_dup_paragraphs:,}")
@@ -236,7 +237,7 @@ def main():
     print(f"    - with cross-book duplicates:        {len(books_with_cross_dupes):,}")
     print(f"    - with within-book duplicates only:  {len(books_with_only_within):,}")
 
-    # 4. Cluster size statistics
+    # Cluster size statistics
     print("\n--- Cluster Size Statistics ---")
     sizes = []
     for sz, count in cluster_sizes.items():
@@ -269,10 +270,14 @@ def main():
         elif sz == 11:
             print(f"    ...")
 
-    # 5. Cross-book vs within-book
+    # Cross-book vs within-book
     print("\n--- Cross-book vs Within-book ---")
-    print(f"  Within-book clusters (same book):    {within_book_clusters:,} ({100*within_book_clusters/n_clusters:.1f}%)")
-    print(f"  Cross-book clusters (diff books):    {cross_book_clusters:,} ({100*cross_book_clusters/n_clusters:.1f}%)")
+    print(
+        f"  Within-book clusters (same book):    {within_book_clusters:,} ({100 * within_book_clusters / n_clusters:.1f}%)"
+    )
+    print(
+        f"  Cross-book clusters (diff books):    {cross_book_clusters:,} ({100 * cross_book_clusters / n_clusters:.1f}%)"
+    )
 
     print("\n  Books spanned per cluster:")
     for span in sorted(cluster_book_span.keys())[:20]:
@@ -281,7 +286,7 @@ def main():
     if max(cluster_book_span.keys()) > 20:
         print(f"    ... (max: {max(cluster_book_span.keys())} books)")
 
-    # 3. Books with very many duplicates
+    # Books with very many duplicates
     print(f"\n--- Top {args.top_books} Books by Cross-Book Duplicate Paragraph Count ---")
     for barcode, count in book_cross_dup_count.most_common(args.top_books):
         extra = ""
@@ -302,7 +307,7 @@ def main():
             extra = f" ({pct:.1f}% of {total_paras:,} paragraphs, {lang})"
         print(f"  {barcode}: {count:,} within-book dup paragraphs{extra}")
 
-    # 4. Book-pair affinity (most shared duplicates)
+    # Book-pair affinity (most shared duplicates)
     print(f"\n--- Top {args.top_pairs} Book Pairs by Shared Duplicates ---")
     for (a, b), count in book_pair_shared.most_common(args.top_pairs):
         extra = ""
@@ -312,7 +317,7 @@ def main():
             extra = f" [{la}/{lb}]"
         print(f"  {a} <-> {b}: {count:,} shared duplicate paragraphs{extra}")
 
-    # 5. Paragraph position bias
+    # Paragraph position bias
     if para_indices:
         para_indices.sort()
         n = len(para_indices)
@@ -349,9 +354,9 @@ def main():
         print("  Position distribution:")
         for label in ["0-9", "10-49", "50-99", "100-499", "500-999", "1000+"]:
             c = buckets.get(label, 0)
-            print(f"    para idx {label:>8}: {c:>12,} ({100*c/n:.1f}%)")
+            print(f"    para idx {label:>8}: {c:>12,} ({100 * c / n:.1f}%)")
 
-    # 6. Duplicate density per book
+    # Duplicate density per book
     if book_meta:
         print("\n--- Duplicate Density Distribution (cross-book) ---")
         densities: list[float] = []
@@ -365,10 +370,10 @@ def main():
         if densities:
             n_d = len(densities)
             print(f"  Books with density data:  {n_d:,}")
-            print(f"  Mean density:             {sum(densities)/n_d:.3f}")
-            print(f"  Median density:           {densities[n_d//2]:.3f}")
-            print(f"  P90 density:              {densities[int(n_d*0.90)]:.3f}")
-            print(f"  P99 density:              {densities[int(n_d*0.99)]:.3f}")
+            print(f"  Mean density:             {sum(densities) / n_d:.3f}")
+            print(f"  Median density:           {densities[n_d // 2]:.3f}")
+            print(f"  P90 density:              {densities[int(n_d * 0.90)]:.3f}")
+            print(f"  P99 density:              {densities[int(n_d * 0.99)]:.3f}")
 
             density_buckets: Counter[str] = Counter()
             for d in densities:
@@ -390,7 +395,7 @@ def main():
             print("  Density distribution:")
             for label in ["<1%", "1-5%", "5-10%", "10-25%", "25-50%", "50-75%", "75-100%"]:
                 c = density_buckets.get(label, 0)
-                print(f"    {label:>8} duplicated: {c:>10,} books ({100*c/n_d:.1f}%)")
+                print(f"    {label:>8} duplicated: {c:>10,} books ({100 * c / n_d:.1f}%)")
 
         # Top books by cross-book duplicate percentage
         book_densities: list[tuple[float, str]] = []
@@ -408,14 +413,14 @@ def main():
             total_paras = book_meta[barcode]["n_paragraphs"]
             lang = book_meta[barcode]["language"] or "unknown"
             print(
-                f"  {barcode}: {100*pct:.1f}%"
+                f"  {barcode}: {100 * pct:.1f}%"
                 f" ({dup_count:,} / {total_paras:,} paragraphs, {lang})"
             )
     else:
         print("\n--- Duplicate Density ---")
         print("  Skipped (pass --book-metadata to enable)")
 
-    # 7. Language distribution of books with duplicates
+    # Language distribution of books with duplicates
     if book_meta:
         print("\n--- Language Distribution (books with cross-book duplicates) ---")
         lang_counter: Counter[str] = Counter()
@@ -427,7 +432,7 @@ def main():
             lang_all[meta["language"] or "unknown"] += 1
 
         print(f"  {'Language':<12} {'With dupes':>12} {'Total books':>12} {'Dup rate':>10}")
-        print(f"  {'-'*12} {'-'*12} {'-'*12} {'-'*10}")
+        print(f"  {'-' * 12} {'-' * 12} {'-' * 12} {'-' * 10}")
         for lang, dup_count in lang_counter.most_common(30):
             total_count = lang_all.get(lang, 0)
             rate = 100 * dup_count / total_count if total_count > 0 else 0
@@ -436,13 +441,17 @@ def main():
         print("\n--- Language Distribution ---")
         print("  Skipped (pass --book-metadata to enable)")
 
-    # 8. Book-level connected components
+    # Book-level connected components
     min_w = args.min_edge_weight
     print(f"\n--- Book-Level Connected Components (min edge weight: {min_w}) ---")
     book_uf = BookUnionFind()
     for (a, b), weight in book_pair_shared.items():
         if weight >= min_w:
-            book_uf.union(a, b, book_pair_rep_ids.get((a, b), [""])[0] if book_pair_rep_ids.get((a, b)) else "")
+            book_uf.union(
+                a,
+                b,
+                book_pair_rep_ids.get((a, b), [""])[0] if book_pair_rep_ids.get((a, b)) else "",
+            )
     # Add singleton books (have duplicates but only within-book, no qualifying edges)
     for barcode in books_with_any_dupes:
         book_uf.find(barcode)
@@ -469,9 +478,12 @@ def main():
         for i, (root, members) in enumerate(sorted_components[:5]):
             if len(members) > 1:
                 rep_id = rep_ids.get(root, "N/A")
-                print(f"\n    Family #{i+1} (size: {len(members):,} books):")
+                print(f"\n    Family #{i + 1} (size: {len(members):,} books):")
                 print(f"      Representative cluster ID: {rep_id}")
-                print(f"      Books: {', '.join(sorted(members)[:10])}" + ("..." if len(members) > 10 else ""))
+                print(
+                    f"      Books: {', '.join(sorted(members)[:10])}"
+                    + ("..." if len(members) > 10 else "")
+                )
 
 
 if __name__ == "__main__":
