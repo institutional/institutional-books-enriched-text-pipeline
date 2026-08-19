@@ -1,0 +1,129 @@
+"""
+jsonl_io.py - utilities for reading/writing JSONL files with optional gzip compression
+
+Provides transparent handling of .jsonl and .jsonl.gz files.
+
+Institutional Books - Enriched Text - 2026
+"""
+
+import gzip
+import json
+from pathlib import Path
+from typing import IO, Any, Iterator
+
+
+def open_jsonl(path: Path | str, mode: str = "r") -> IO[str]:
+    """
+    Open a JSONL file, automatically handling gzip compression.
+
+    Detects .gz extension and uses gzip.open() accordingly.
+    For reading, use mode='r' or 'rt'.
+    For writing, use mode='w' or 'wt'.
+
+    Args:
+        path: Path to the file
+        mode: File mode ('r', 'rt', 'w', 'wt')
+
+    Returns:
+        File handle (text mode)
+    """
+    path = Path(path)
+
+    # Normalize mode to text mode
+    if mode in ("r", "rt"):
+        text_mode = "rt"
+    elif mode in ("w", "wt"):
+        text_mode = "wt"
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Use 'r' or 'w'.")
+
+    if path.suffix == ".gz":
+        return gzip.open(path, text_mode, encoding="utf-8")
+    else:
+        return open(path, text_mode, encoding="utf-8")
+
+
+def iter_jsonl(path: Path | str) -> Iterator[dict[str, Any]]:
+    """
+    Iterate over records in a JSONL file.
+
+    Automatically handles gzip compression based on file extension.
+
+    Args:
+        path: Path to the JSONL file
+
+    Yields:
+        Parsed JSON records as dictionaries
+    """
+    with open_jsonl(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def ensure_gz_suffix(path: Path | str) -> Path:
+    """
+    Ensure path has .gz suffix for gzipped JSONL files.
+
+    Converts:
+        foo.jsonl -> foo.jsonl.gz
+        foo.jsonl.gz -> foo.jsonl.gz (unchanged)
+    """
+    path = Path(path)
+    if path.name.endswith(".gz"):
+        return path
+    elif path.suffix == ".jsonl":
+        return path.with_suffix(".jsonl.gz")
+    else:
+        return Path(str(path) + ".gz")
+
+
+def strip_gz_suffix(path: Path | str) -> Path:
+    """
+    Remove .gz suffix from path if present.
+
+    Converts:
+        foo.jsonl.gz -> foo.jsonl
+        foo.jsonl -> foo.jsonl (unchanged)
+    """
+    path = Path(path)
+    if path.name.endswith(".gz"):
+        return Path(str(path)[:-3])  # Remove .gz
+    return path
+
+
+def load_bpb_map(bpb_file: Path | str | None) -> dict[str, list[float]]:
+    """
+    Load BPB values from a .bpb.jsonl file.
+
+    Handles gzip compression automatically. Skips malformed JSON lines with a warning.
+
+    Args:
+        bpb_file: Path to the BPB file, or None
+
+    Returns:
+        Dict mapping book_id to list of BPB values
+    """
+    from loguru import logger
+
+    if bpb_file is None:
+        return {}
+
+    path = Path(bpb_file)
+    if not path.exists():
+        return {}
+
+    bpb_map: dict[str, list[float]] = {}
+    with open_jsonl(path, "r") as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                bpb_map[record["book_id"]] = record["bpb_values"]
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Skipping malformed line {line_num} in {path}: {e}")
+
+    return bpb_map
