@@ -12,7 +12,7 @@ This pipeline comes with a library of cleaning, chunking, and annotating utiliti
 - 🤗 [Institutional Books Collection on HuggingFace](https://huggingface.co/collections/institutional/institutional-books)
 - 🤗 [IB-HL-ET on HuggingFace](https://huggingface.co/datasets/institutional/institutional-books-hl-enriched-text)
 - 🧰 [IB-ET parser library](https://github.com/institutional/institutional-books-enriched-text-parser)
-- 📄 [IB-HL-ET Technical Report](soon to appear)
+- 📄 [IB-HL-ET Technical Report](https://arxiv.org/abs/2608.19026)
 - 🌐 [Website](https://institutional.org/)
 
 ---
