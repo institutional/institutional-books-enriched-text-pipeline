@@ -502,6 +502,16 @@ collections as data.
 
 ## Cite
 
-> TODO
+```bibtext
+@misc{lowryduda2026institutionalbooksenriched,
+      title={Institutional Books - Enriched Text: A customizable multilingual open-source pipeline for denoising, deduplicating, and annotating OCR text at scale}, 
+      author={David Lowry-Duda and Matteo Cargnelutti and Catherine Brobston and Salwa Ismail and Greg Leppert and Amanda Watson and Jonathan Zittrain},
+      year={2026},
+      eprint={2608.19026},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2608.19026}, 
+}
+```
 
 [☝️ Back to summary](#summary)
